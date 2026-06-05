@@ -1,0 +1,10 @@
+{
+  "RTBH_MODE": "dev",
+  "INTERSTITIAL_PREVIEW_SIZES": [
+    "768x1024",
+    "1024x768"
+  ],
+  "CURRENT_PROJECT": {
+    "type": "scroll_banner"
+  }
+}

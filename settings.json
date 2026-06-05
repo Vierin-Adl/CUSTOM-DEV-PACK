@@ -3,14 +3,10 @@
     {
       "folder": "0x0_responsive",
       "sizes": [
-        "300x600",
-        "320x480",
-        "160x600",
-        "336x280",
-        "300x250",
-        "970x250",
-        "970x90",
-        "728x90"
+        "750x1334",
+        "1920x1080",
+        "1080x1920",
+        "1334x750"
       ]
     }
   ],
@@ -28,9 +24,5 @@
   "BANNER_SPECIAL_OFFER_ID": "",
   "BANNER_SPECIAL_OFFER_ID_2": "",
   "BANNER_SPECIAL_OFFER_ID_3": "",
-  "CREATIVE_SOURCE": "default",
-  "RTBH_MODE": "dev",
-  "CURRENT_PROJECT": {
-    "type": "interstitial"
-  }
+  "CREATIVE_SOURCE": "default"
 }

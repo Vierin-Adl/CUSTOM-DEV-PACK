@@ -1,0 +1,65 @@
+// ── Reset ─────────────────────────────────────────────────────────────────────
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+// ── Base ──────────────────────────────────────────────────────────────────────
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+// ── Click overlay ─────────────────────────────────────────────────────────────
+.banner_click_area {
+  position: fixed;
+  inset: 0;
+  cursor: pointer;
+  z-index: 9999;
+}
+
+// ── Banner wrapper ────────────────────────────────────────────────────────────
+.banner__wrapper {
+  position: relative;
+  overflow: hidden;
+
+  * {
+    position: absolute;
+    background-repeat: no-repeat;
+    background-size: contain;
+  }
+}
+
+.vert .banner__wrapper {
+  aspect-ratio: 3/4;
+  width: min(100vw, 56.25vh);
+  height: min(100vh, 177.78vw);
+}
+
+.land .banner__wrapper {
+  aspect-ratio: 4/3;
+  width: min(100vw, 133.33vh);
+  height: min(100vh, 75vw);
+}
+
+// ── Layout: vert ──────────────────────────────────────────────────────────────
+.vert {
+}
+
+// ── Layout: land ──────────────────────────────────────────────────────────────
+.land {
+}

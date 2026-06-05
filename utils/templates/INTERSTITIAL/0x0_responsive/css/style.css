@@ -1,0 +1,70 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body,
+h1, h2, h3, h4,
+p,
+ul[class], ol[class],
+li, figure, figcaption,
+blockquote, dl, dd {
+  margin: 0;
+}
+
+ul[class],
+ol[class] {
+  padding: 0;
+  list-style: none;
+}
+
+input, button, textarea, select {
+  font: inherit;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.banner_click_area {
+  position: fixed;
+  inset: 0;
+  cursor: pointer;
+  z-index: 9999;
+}
+
+.banner__wrapper {
+  position: relative;
+  overflow: hidden;
+}
+.banner__wrapper * {
+  position: absolute;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.vert .banner__wrapper {
+  aspect-ratio: 3/4;
+  width: min(100vw, 56.25vh);
+  height: min(100vh, 177.78vw);
+}
+
+.land .banner__wrapper {
+  aspect-ratio: 4/3;
+  width: min(100vw, 133.33vh);
+  height: min(100vh, 75vw);
+}

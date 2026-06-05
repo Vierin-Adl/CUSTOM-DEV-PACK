@@ -1,8 +1,9 @@
 (function () {
-  var SETTINGS_URL = "/settings.json";
-  var STATUS_URL   = "/api/status";
-  var START_URL    = "/api/start";
-  var CLEAR_URL    = "/api/clear";
+  var SETTINGS_URL     = "/settings.json";
+  var DEV_SETTINGS_URL = "/dev-settings.json";
+  var STATUS_URL       = "/api/status";
+  var START_URL        = "/api/start";
+  var CLEAR_URL        = "/api/clear";
 
   var BANNER_TYPES = [
     { label: "custom"        },
@@ -14,6 +15,7 @@
   var RTBH_MODE = "dev";
   var BANNER_TYPE = "";
   var sizes = [];
+  var interstitialSizes = [];
   var sizeSelect, addInput;
 
   // ── Styles ────────────────────────────────────────────
@@ -174,26 +176,39 @@
 
   // ── Size / settings helpers ───────────────────────────
   function setSize(size) {
-    if (BANNER_TYPE !== "interstitial") {
-      var orientClass = document.body.classList.contains("land") ? "land"
-                      : document.body.classList.contains("vert") ? "vert" : null;
-      document.body.className = "b" + size;
-      if (orientClass) document.body.classList.add(orientClass);
-    }
     document.body.dataset.devSize = "1";
     localStorage.setItem("__dp_size", size);
     var parts = size.split("x");
-    var w = parts[0] + "px", h = parts[1] + "px";
+    var w = parseInt(parts[0]), h = parseInt(parts[1]);
+
+    if (BANNER_TYPE === "interstitial") {
+      document.body.style.width  = w + "px";
+      document.body.style.height = h + "px";
+      document.body.classList.remove("land", "vert");
+      document.body.classList.add(w > h ? "land" : "vert");
+      var wrapper = document.querySelector(".banner__wrapper");
+      if (wrapper) { wrapper.style.width = w + "px"; wrapper.style.height = h + "px"; }
+      return;
+    }
+
+    var orientClass = document.body.classList.contains("land") ? "land"
+                    : document.body.classList.contains("vert") ? "vert" : null;
+    document.body.className = "b" + size;
+    if (orientClass) document.body.classList.add(orientClass);
+    var wPx = w + "px", hPx = h + "px";
     var scroller = document.querySelector('[data-item="inread-root"]');
-    if (scroller) { scroller.style.width = w; scroller.style.height = h; }
+    if (scroller) { scroller.style.width = wPx; scroller.style.height = hPx; }
     var banner = document.querySelector(".banner");
-    if (banner) { banner.style.width = w; banner.style.height = h; }
-    if (typeof updateDim === "function") updateDim();
+    if (banner) { banner.style.width = wPx; banner.style.height = hPx; }
+  }
+
+  function activeArr() {
+    return BANNER_TYPE === "interstitial" ? interstitialSizes : sizes;
   }
 
   function rebuildSizeOptions() {
     while (sizeSelect.options.length) sizeSelect.remove(0);
-    sizes.forEach(function (s) {
+    activeArr().forEach(function (s) {
       var opt = document.createElement("option");
       opt.value = s; opt.textContent = s;
       sizeSelect.appendChild(opt);
@@ -204,8 +219,9 @@
     var val = addInput.value.trim().toLowerCase();
     if (!/^\d+x\d+$/.test(val)) { addInput.style.borderColor = "#e05c5c"; return; }
     addInput.style.borderColor = "";
-    if (sizes.indexOf(val) !== -1) { sizeSelect.value = val; setSize(val); return; }
-    sizes.push(val);
+    var arr = activeArr();
+    if (arr.indexOf(val) !== -1) { sizeSelect.value = val; setSize(val); return; }
+    arr.push(val);
     rebuildSizeOptions();
     sizeSelect.value = val;
     setSize(val);
@@ -214,20 +230,38 @@
   }
 
   function saveSettings() {
-    return fetch(SETTINGS_URL)
+    // Save dev state (RTBH_MODE, preview sizes) to dev-settings.json
+    var devPromise = fetch(DEV_SETTINGS_URL)
       .then(function (r) { return r.json(); })
-      .then(function (s) {
-        if (s.FLUID_CREATIVE_SIZES && s.FLUID_CREATIVE_SIZES[0]) {
-          s.FLUID_CREATIVE_SIZES[0].sizes = sizes;
-        }
-        s.RTBH_MODE = RTBH_MODE;
-        return fetch(SETTINGS_URL, {
+      .then(function (ds) {
+        ds.RTBH_MODE = RTBH_MODE;
+        if (BANNER_TYPE === "interstitial") ds.INTERSTITIAL_PREVIEW_SIZES = interstitialSizes;
+        return fetch(DEV_SETTINGS_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(s, null, 2),
+          body: JSON.stringify(ds, null, 2),
         });
       })
       .catch(function () {});
+
+    // Save FLUID_CREATIVE_SIZES to settings.json (non-interstitial only)
+    if (BANNER_TYPE !== "interstitial") {
+      return fetch(SETTINGS_URL)
+        .then(function (r) { return r.json(); })
+        .then(function (s) {
+          if (s.FLUID_CREATIVE_SIZES && s.FLUID_CREATIVE_SIZES[0]) {
+            s.FLUID_CREATIVE_SIZES[0].sizes = sizes;
+          }
+          return fetch(SETTINGS_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(s, null, 2),
+          });
+        })
+        .catch(function () {});
+    }
+
+    return devPromise;
   }
 
   // ── EMPTY state ───────────────────────────────────────
@@ -289,9 +323,10 @@
   }
 
   // ── WORKING state ─────────────────────────────────────
-  function buildWorkingPanel(project, loadedSizes, loadedMode) {
+  function buildWorkingPanel(project, loadedSizes, loadedMode, loadedInterstitialSizes) {
     panel.innerHTML = "";
     sizes = loadedSizes;
+    interstitialSizes = loadedInterstitialSizes || ["768x1024", "1024x768"];
     RTBH_MODE = loadedMode || "dev";
 
     var type = project ? project.type : "—";
@@ -306,27 +341,25 @@
     panel.appendChild(statusRow);
     panel.appendChild(mkHsep());
 
-    // size (hidden for interstitial — viewport-based, no fixed sizes)
-    if (type !== "interstitial") {
-      var sizeRow = mkRow();
-      sizeRow.appendChild(mkLabel("SIZE"));
-      sizeSelect = document.createElement("select");
-      sizeRow.appendChild(sizeSelect);
-      var sep = document.createElement("div"); sep.className = "__sep";
-      sizeRow.appendChild(sep);
-      addInput = document.createElement("input");
-      addInput.className = "__input-sm";
-      addInput.placeholder = "WxH";
-      addInput.maxLength = 12;
-      addInput.onkeydown = function (e) { if (e.key === "Enter") addSize(); };
-      sizeRow.appendChild(addInput);
-      var addBtn = document.createElement("button");
-      addBtn.className = "__add-btn"; addBtn.title = "Add size"; addBtn.textContent = "+";
-      addBtn.onclick = addSize;
-      sizeRow.appendChild(addBtn);
-      panel.appendChild(sizeRow);
-      panel.appendChild(mkHsep());
-    }
+    // size
+    var sizeRow = mkRow();
+    sizeRow.appendChild(mkLabel("SIZE"));
+    sizeSelect = document.createElement("select");
+    sizeRow.appendChild(sizeSelect);
+    var sep = document.createElement("div"); sep.className = "__sep";
+    sizeRow.appendChild(sep);
+    addInput = document.createElement("input");
+    addInput.className = "__input-sm";
+    addInput.placeholder = "WxH";
+    addInput.maxLength = 12;
+    addInput.onkeydown = function (e) { if (e.key === "Enter") addSize(); };
+    sizeRow.appendChild(addInput);
+    var addBtn = document.createElement("button");
+    addBtn.className = "__add-btn"; addBtn.title = "Add size"; addBtn.textContent = "+";
+    addBtn.onclick = addSize;
+    sizeRow.appendChild(addBtn);
+    panel.appendChild(sizeRow);
+    panel.appendChild(mkHsep());
 
     // rtbh
     var modeRow = mkRow();
@@ -386,17 +419,19 @@
     panel.appendChild(clearRow);
 
     // wire size
-    if (type !== "interstitial") {
-      sizeSelect.onchange = function () { setSize(sizeSelect.value); updatePreviewUrl(); };
-      rebuildSizeOptions();
-      if (sizes.length) {
-        var saved = localStorage.getItem("__dp_size");
-        var initial = (saved && sizes.indexOf(saved) !== -1) ? saved : sizes[0];
-        sizeSelect.value = initial;
-        setSize(initial);
-      }
-    } else {
-      if (typeof updateDim === "function") updateDim();
+    sizeSelect.onchange = function () {
+      setSize(sizeSelect.value);
+      if (type !== "interstitial") updatePreviewUrl();
+    };
+    rebuildSizeOptions();
+    var arr = activeArr();
+    if (arr.length) {
+      var saved = localStorage.getItem("__dp_size");
+      var initial = (saved && arr.indexOf(saved) !== -1) ? saved : arr[0];
+      sizeSelect.value = initial;
+      setSize(initial);
+    } else if (typeof updateDim === "function") {
+      updateDim();
     }
 
     document.dispatchEvent(new CustomEvent("devpanel:ready"));
@@ -407,16 +442,20 @@
     .then(function (r) { return r.json(); })
     .then(function (status) {
       if (status.state === "working") {
-        fetch(SETTINGS_URL, { cache: "no-store" })
-          .then(function (r) { return r.json(); })
-          .then(function (s) {
+        Promise.all([
+          fetch(SETTINGS_URL,     { cache: "no-store" }).then(function (r) { return r.json(); }),
+          fetch(DEV_SETTINGS_URL, { cache: "no-store" }).then(function (r) { return r.json(); }),
+        ])
+          .then(function (results) {
+            var s = results[0], ds = results[1];
             buildWorkingPanel(
               status.project,
               (s.FLUID_CREATIVE_SIZES && s.FLUID_CREATIVE_SIZES[0] && s.FLUID_CREATIVE_SIZES[0].sizes) || [],
-              s.RTBH_MODE || "dev"
+              ds.RTBH_MODE || "dev",
+              ds.INTERSTITIAL_PREVIEW_SIZES || ["768x1024", "1024x768"]
             );
           })
-          .catch(function () { buildWorkingPanel(status.project, ["300x600", "300x250"], "dev"); });
+          .catch(function () { buildWorkingPanel(status.project, ["300x600", "300x250"], "dev", ["768x1024", "1024x768"]); });
       } else {
         buildEmptyPanel();
       }

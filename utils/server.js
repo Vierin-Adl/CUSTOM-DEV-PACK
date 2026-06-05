@@ -18,7 +18,8 @@ const TEMPLATES_DIR = path.join(__dirname, "templates");
 const WORK_DIR      = path.join(ROOT, "0x0_responsive");
 const SCSS_PATH     = path.join(WORK_DIR, "css/style.scss");
 const CSS_PATH      = path.join(WORK_DIR, "css/style.css");
-const SETTINGS_PATH = path.join(ROOT, "settings.json");
+const SETTINGS_PATH     = path.join(ROOT, "settings.json");
+const DEV_SETTINGS_PATH = path.join(__dirname, "dev-settings.json");
 
 // ── SCSS compile ──────────────────────────────────────────────────────────────
 function compileScss() {
@@ -100,6 +101,13 @@ function writeSettings(obj) {
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(obj, null, 2), "utf8");
 }
 
+function readDevSettings() {
+  try { return JSON.parse(fs.readFileSync(DEV_SETTINGS_PATH, "utf8")); } catch { return {}; }
+}
+function writeDevSettings(obj) {
+  fs.writeFileSync(DEV_SETTINGS_PATH, JSON.stringify(obj, null, 2), "utf8");
+}
+
 // ── HTML injection tags ───────────────────────────────────────────────────────
 const DEV_PANEL_JS  = fs.readFileSync(path.join(__dirname, "dev-panel.js"), "utf8");
 const DEV_PANEL_TAG = "\n<script>\n" + DEV_PANEL_JS + "\n</script>\n";
@@ -157,7 +165,7 @@ const MIME = {
 };
 
 function getRtbhMode() {
-  return readSettings().RTBH_MODE === "prod" ? "prod" : "dev";
+  return readDevSettings().RTBH_MODE === "prod" ? "prod" : "dev";
 }
 
 function serveHtml(filePath, isPreview) {
@@ -363,7 +371,7 @@ const server = http.createServer((req, res) => {
   // GET /api/status
   if (req.method === "GET" && urlPath === "/api/status") {
     const exists = fs.existsSync(WORK_DIR);
-    const project = exists ? (readSettings().CURRENT_PROJECT || null) : null;
+    const project = exists ? (readDevSettings().CURRENT_PROJECT || null) : null;
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ state: exists ? "working" : "empty", project }));
     return;
@@ -388,9 +396,9 @@ const server = http.createServer((req, res) => {
           return;
         }
         copyDirSync(templateDir, WORK_DIR);
-        const settings = readSettings();
-        settings.CURRENT_PROJECT = { type };
-        writeSettings(settings);
+        const devSettings = readDevSettings();
+        devSettings.CURRENT_PROJECT = { type };
+        writeDevSettings(devSettings);
         startWatcher();
         compileScss();
         console.log(`[start] ${type}`);
@@ -408,18 +416,43 @@ const server = http.createServer((req, res) => {
   if (req.method === "POST" && urlPath === "/api/clear") {
     try {
       if (fs.existsSync(WORK_DIR)) fs.rmSync(WORK_DIR, { recursive: true, force: true });
-      const settings = readSettings();
-      delete settings.CURRENT_PROJECT;
-      writeSettings(settings);
+      const devSettings = readDevSettings();
+      delete devSettings.CURRENT_PROJECT;
+      writeDevSettings(devSettings);
       if (watcher) { try { watcher.close(); } catch {} watcher = null; }
       console.log("[clear] working directory removed");
-      notifyReload();
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
     } catch (e) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: e.message }));
     }
+    return;
+  }
+
+  // GET /dev-settings.json
+  if (req.method === "GET" && urlPath === "/dev-settings.json") {
+    res.writeHead(200, { "Content-Type": MIME[".json"] });
+    res.end(JSON.stringify(readDevSettings()));
+    return;
+  }
+
+  // POST /dev-settings.json
+  if (req.method === "POST" && urlPath === "/dev-settings.json") {
+    let body = "";
+    req.on("data", chunk => body += chunk);
+    req.on("end", () => {
+      try {
+        JSON.parse(body);
+        fs.writeFileSync(DEV_SETTINGS_PATH, body, "utf8");
+        res.writeHead(200, { "Content-Type": MIME[".json"] });
+        res.end('{"ok":true}');
+        console.log("[saved] dev-settings.json");
+      } catch {
+        res.writeHead(400);
+        res.end('{"error":"invalid json"}');
+      }
+    });
     return;
   }
 
