@@ -47,12 +47,25 @@ Use the **↗ Preview in article** button to test scroll behavior.
 
 ### `commerce_ads`
 
-Commerce-focused banner. Same size system as `custom`.
+**Click tags** — to assign a URL to a clickable element, populate the corresponding variable in `index.html`'s `<head>`:
+
+```html
+var clickTag = '';
+<!-- main / default click -->
+var clickSpecialOffer1Tag = '';
+<!-- special offer button 1 -->
+var clickSpecialOffer2Tag = '';
+<!-- special offer button 2 -->
+var clickSpecialOffer3Tag = '';
+<!-- special offer button 3 -->
+```
+
+Add the destination URL (or Adturbo click macro) as the string value. The `CLICK_MAP` in `extra.js` wires up all click events automatically — no other changes needed.
 
 ### `interstitial`
 
 Responsive full-viewport banner. Body gets `land` or `vert` depending on device orientation — **no fixed sizes**.  
-The SIZE selector is hidden for this type. Layout is controlled via `.vert` and `.land` selectors in `style.scss`.
+The SIZE dropdown lets you preview the two default orientations (`768x1024` portrait, `1024x768` landscape) during development — it sets `body` width/height and the `land`/`vert` class. These sizes are dev-only and never written to `settings.json`. Layout is controlled via `.vert` and `.land` selectors in `style.scss`.
 
 ---
 

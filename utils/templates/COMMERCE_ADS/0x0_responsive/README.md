@@ -1,16 +1,14 @@
 # Commerce Ads
 
-## Click Tags
+**Click tags** — to assign a special offer id to a clickable element, populate the corresponding variable in `index.html`'s `<head>`:
 
-Empty strings in `<head>` — filled by the ad server at runtime.
-
-- `clickTag` — `.clickholder` (main click)
-- `clickSpecialOffer1Tag` — `.banner__btn--1`
-- `clickSpecialOffer2Tag` — `.banner__btn--2`
-- `clickSpecialOffer3Tag` — `.banner__btn--3`
-
-## Add a Click Zone
-
-1. Add `var clickSpecialOfferNTag = '';` in `<head>`.
-2. Add `data-action="special-offer-N"` to the element.
-3. Add to `CLICK_MAP`: `{ action: 'special-offer-N', tagVar: 'clickSpecialOfferNTag' }`
+```html
+var clickTag = '';
+<!-- main / default click -->
+var clickSpecialOffer1Tag = '';
+<!-- special offer button 1 -->
+var clickSpecialOffer2Tag = '';
+<!-- special offer button 2 -->
+var clickSpecialOffer3Tag = '';
+<!-- special offer button 3 -->
+```
