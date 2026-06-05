@@ -1,0 +1,11 @@
+{
+  "name": "custom-dev-pack",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node utils/server.js"
+  },
+  "dependencies": {
+    "sass": "^1.77.0"
+  }
+}

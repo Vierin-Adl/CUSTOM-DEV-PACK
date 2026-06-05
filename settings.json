@@ -1,0 +1,36 @@
+{
+  "FLUID_CREATIVE_SIZES": [
+    {
+      "folder": "0x0_responsive",
+      "sizes": [
+        "300x600",
+        "320x480",
+        "160x600",
+        "336x280",
+        "300x250",
+        "970x250",
+        "970x90",
+        "728x90"
+      ]
+    }
+  ],
+  "ADTRACKER": {
+    "HEATMAP_ENABLED": "true",
+    "TRACKS_ENABLED": "true",
+    "INTERACTIONS_ENABLED": "true"
+  },
+  "LABELS": [],
+  "OPTOUT_ICON": "adlook",
+  "OPTOUT_POSITION": "top:2px; right:2px",
+  "UPLOAD_NAME": "",
+  "UPLOAD_ID": "",
+  "BANNER_BORDER_STYLE": "1px solid #888",
+  "BANNER_SPECIAL_OFFER_ID": "",
+  "BANNER_SPECIAL_OFFER_ID_2": "",
+  "BANNER_SPECIAL_OFFER_ID_3": "",
+  "CREATIVE_SOURCE": "default",
+  "RTBH_MODE": "dev",
+  "CURRENT_PROJECT": {
+    "type": "interstitial"
+  }
+}
