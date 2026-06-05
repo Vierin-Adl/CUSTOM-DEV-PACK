@@ -1,0 +1,96 @@
+.b300x600 {
+  width: 300px;
+  height: 600px;
+}
+
+.b320x480 {
+  width: 320px;
+  height: 480px;
+}
+
+.b160x600 {
+  width: 160px;
+  height: 600px;
+}
+
+.b336x280 {
+  width: 336px;
+  height: 280px;
+}
+
+.b300x250 {
+  width: 300px;
+  height: 250px;
+}
+
+.b970x250 {
+  width: 970px;
+  height: 250px;
+}
+
+.b970x90 {
+  width: 970px;
+  height: 90px;
+}
+
+.b728x90 {
+  width: 728px;
+  height: 90px;
+}
+
+.b300x600 .bg {
+  background-image: url("../images/banner__bg-300x600.webp");
+}
+
+.b320x480 .bg {
+  background-image: url("../images/banner__bg-320x480.webp");
+}
+
+.b160x600 .bg {
+  background-image: url("../images/banner__bg-160x600.webp");
+}
+
+.b336x280 .bg {
+  background-image: url("../images/banner__bg-336x280.webp");
+}
+
+.b300x250 .bg {
+  background-image: url("../images/banner__bg-300x250.webp");
+}
+
+.b970x250 .bg {
+  background-image: url("../images/banner__bg-970x250.webp");
+}
+
+.b970x90 .bg {
+  background-image: url("../images/banner__bg-970x90.webp");
+}
+
+.b728x90 .bg {
+  background-image: url("../images/banner__bg-728x90.webp");
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.banner__wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.banner_click_area {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+body * {
+  background-size: contain;
+  background-repeat: no-repeat;
+}/*# sourceMappingURL=style.css.map */

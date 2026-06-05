@@ -1,0 +1,63 @@
+$sizes: (
+  "300x600",
+  "320x480",
+  "160x600",
+  "336x280",
+  "300x250",
+  "970x250",
+  "970x90",
+  "728x90"
+);
+
+// set wrapper size
+@each $size in $sizes {
+  $x-index: str-index($size, "x");
+
+  $width: str-slice($size, 1, $x-index - 1);
+  $height: str-slice($size, $x-index + 1);
+
+  .b#{$size} {
+    width: #{$width}px;
+    height: #{$height}px;
+  }
+}
+
+// set image for each size
+@each $size in $sizes {
+  .b#{$size} {
+    .bg {
+      background-image: url("../images/banner__bg-#{$size}.webp");
+    }
+  }
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.banner__wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.banner_click_area {
+  position: absolute;
+  inset: 0;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+body * {
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.b300x600 {
+}

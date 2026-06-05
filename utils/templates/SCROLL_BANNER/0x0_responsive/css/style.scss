@@ -1,0 +1,88 @@
+// ─── Active sizes — must match creativeConfig in index.html ──────────────────
+$sizes: (
+  "300x600",
+  "320x480",
+  "160x600",
+  "336x280",
+  "300x250",
+  "970x250",
+  "970x90",
+  "728x90"
+);
+
+// Auto-generates size classes: .b300x600 { width: 300px; height: 600px; } etc.
+@each $size in $sizes {
+  $x-index: str-index($size, "x");
+  $width: str-slice($size, 1, $x-index - 1);
+  $height: str-slice($size, $x-index + 1);
+
+  .b#{$size} {
+    width: #{$width}px;
+    height: #{$height}px;
+  }
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.inread-root {
+  position: relative;
+}
+
+.inread-scroller {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.banner {
+  position: relative;
+}
+
+.banner__inner {
+  position: absolute;
+  inset: 0;
+}
+
+.banner__inner.hide {
+  display: none;
+}
+
+.banner__click_area {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  cursor: pointer;
+}
+
+.banner > .border {
+  background-color: #cccccc;
+}
+
+// Root container — set your background color here
+.banner__wrapper {
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  overflow: hidden;
+  background-color: #fff; // change to match brand
+}
+
+// All direct children are absolutely positioned by default
+.banner__wrapper > * {
+  position: absolute;
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+p {
+  margin: 0;
+  line-height: 1;
+}
+
+.b300x600 {
+}
