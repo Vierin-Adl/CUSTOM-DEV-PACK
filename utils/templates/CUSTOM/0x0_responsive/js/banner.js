@@ -9,7 +9,7 @@ if (typeof RtbhEnabler === "undefined") {
     },
     open: function (url) {
       if (url) window.open(url, "_blank");
-    }
+    },
   };
 }
 
@@ -23,8 +23,8 @@ var KNOWN_SIZES = [
   [336, 280],
   [300, 250],
   [970, 250],
-  [970,  90],
-  [728,  90]
+  [970, 90],
+  [728, 90],
 ];
 
 // snap to nearest known size to survive browser zoom (skews innerWidth by ±1–2px)
@@ -32,7 +32,8 @@ function snapSize(w, h) {
   var best = KNOWN_SIZES[0];
   var bestDist = Infinity;
   for (var i = 0; i < KNOWN_SIZES.length; i++) {
-    var dist = Math.abs(w - KNOWN_SIZES[i][0]) + Math.abs(h - KNOWN_SIZES[i][1]);
+    var dist =
+      Math.abs(w - KNOWN_SIZES[i][0]) + Math.abs(h - KNOWN_SIZES[i][1]);
     if (dist < bestDist) {
       bestDist = dist;
       best = KNOWN_SIZES[i];
@@ -53,7 +54,7 @@ window.addEventListener("resize", updateDim);
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 RtbhEnabler.onDocumentReady(function () {
+  updateDim();
   initClickOverlay();
   extraInit();
-  updateDim();
 });
