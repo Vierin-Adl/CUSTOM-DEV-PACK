@@ -47,20 +47,16 @@ Use the **↗ Preview in article** button to test scroll behavior.
 
 ### `commerce_ads`
 
-**Click tags** — to assign a URL to a clickable element, populate the corresponding variable in `index.html`'s `<head>`:
+Fill in the special offer IDs in `index.html`'s `<head>` — that's all:
 
 ```html
 var clickTag = '';
-<!-- main / default click -->
 var clickSpecialOffer1Tag = '';
-<!-- special offer button 1 -->
 var clickSpecialOffer2Tag = '';
-<!-- special offer button 2 -->
 var clickSpecialOffer3Tag = '';
-<!-- special offer button 3 -->
 ```
 
-Add the destination URL (or Adturbo click macro) as the string value. The `CLICK_MAP` in `extra.js` wires up all click events automatically — no other changes needed.
+`CLICK_MAP` in `extra.js` wires up all click events automatically — no other changes needed.
 
 ### `interstitial`
 
