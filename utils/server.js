@@ -412,6 +412,38 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // POST /api/upload-image
+  if (req.method === "POST" && urlPath === "/api/upload-image") {
+    let body = "";
+    req.on("data", chunk => body += chunk);
+    req.on("end", () => {
+      try {
+        const { name, data } = JSON.parse(body);
+        if (!name || /[/\\]/.test(name)) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "invalid filename" }));
+          return;
+        }
+        if (!fs.existsSync(WORK_DIR)) {
+          res.writeHead(409, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "no active project" }));
+          return;
+        }
+        const imagesDir = path.join(WORK_DIR, "images");
+        fs.mkdirSync(imagesDir, { recursive: true });
+        const dest = path.join(imagesDir, name);
+        fs.writeFileSync(dest, Buffer.from(data, "base64"));
+        console.log(`[upload] images/${name}`);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
+    return;
+  }
+
   // POST /api/clear
   if (req.method === "POST" && urlPath === "/api/clear") {
     try {

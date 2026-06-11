@@ -434,6 +434,117 @@
       updateDim();
     }
 
+    // ── Drop-to-WebP overlay ──────────────────────────────
+    var dropOverlay = document.createElement("div");
+    dropOverlay.style.cssText = [
+      "display:none;position:fixed;inset:0;z-index:2147483646",
+      "background:rgba(10,12,20,.9);backdrop-filter:blur(6px)",
+      "flex-direction:column;align-items:center;justify-content:center;gap:10px",
+      "font:13px/1 system-ui,sans-serif;pointer-events:none",
+    ].join(";");
+
+    var dropTitle = document.createElement("div");
+    dropTitle.style.cssText = "font-size:28px;font-weight:700;color:#fff;letter-spacing:-.02em";
+    dropTitle.textContent = "Drop → WebP";
+
+    var dropSub = document.createElement("div");
+    dropSub.style.cssText = "font-size:13px;color:#5b8dee;letter-spacing:.03em;margin-top:2px";
+    dropSub.textContent = "saves to images/";
+
+    var dropStatus = document.createElement("div");
+    dropStatus.style.cssText = "font-size:12px;color:#4caf6e;min-height:16px;margin-top:4px";
+
+    dropOverlay.appendChild(dropTitle);
+    dropOverlay.appendChild(dropSub);
+    dropOverlay.appendChild(dropStatus);
+    document.body.appendChild(dropOverlay);
+
+    var dragDepth = 0;
+
+    function hasImageFiles(e) {
+      return Array.prototype.some.call(e.dataTransfer.items || [], function(i) {
+        return i.kind === "file" && i.type.startsWith("image/");
+      });
+    }
+
+    window.addEventListener("dragenter", function(e) {
+      if (!hasImageFiles(e)) return;
+      dragDepth++;
+      dropStatus.textContent = "";
+      dropTitle.textContent = "Drop → WebP";
+      dropTitle.style.color = "#fff";
+      dropOverlay.style.display = "flex";
+    });
+
+    window.addEventListener("dragleave", function() {
+      dragDepth--;
+      if (dragDepth <= 0) { dragDepth = 0; dropOverlay.style.display = "none"; }
+    });
+
+    window.addEventListener("dragover", function(e) { e.preventDefault(); });
+
+    window.addEventListener("drop", function(e) {
+      e.preventDefault();
+      dragDepth = 0;
+      var files = Array.prototype.filter.call(e.dataTransfer.files, function(f) {
+        return f.type.startsWith("image/") && f.type !== "image/svg+xml";
+      });
+      if (!files.length) { dropOverlay.style.display = "none"; return; }
+
+      dropTitle.textContent = "Converting…";
+      dropSub.textContent = "0 / " + files.length;
+
+      function convertToWebp(file, q) {
+        return new Promise(function(resolve, reject) {
+          var img = new Image();
+          var url = URL.createObjectURL(file);
+          img.onload = function() {
+            var c = document.createElement("canvas");
+            c.width = img.naturalWidth; c.height = img.naturalHeight;
+            c.getContext("2d").drawImage(img, 0, 0);
+            URL.revokeObjectURL(url);
+            c.toBlob(function(blob) { blob ? resolve(blob) : reject(); }, "image/webp", q);
+          };
+          img.onerror = function() { URL.revokeObjectURL(url); reject(); };
+          img.src = url;
+        });
+      }
+
+      function toBase64(blob) {
+        return new Promise(function(resolve) {
+          var r = new FileReader();
+          r.onloadend = function() { resolve(r.result.split(",")[1]); };
+          r.readAsDataURL(blob);
+        });
+      }
+
+      function next(i) {
+        if (i >= files.length) {
+          dropTitle.textContent = "Done!";
+          dropTitle.style.color = "#4caf6e";
+          dropSub.textContent = files.length + " file(s) saved to images/";
+          setTimeout(function() { dropOverlay.style.display = "none"; }, 2000);
+          return;
+        }
+        var file = files[i];
+        var name = file.name.replace(/\.[^.]+$/, ".webp");
+        dropSub.textContent = (i + 1) + " / " + files.length + "  —  " + name;
+        convertToWebp(file, 0.85)
+          .then(toBase64)
+          .then(function(b64) {
+            return fetch("/api/upload-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: name, data: b64 }),
+            });
+          })
+          .then(function() { next(i + 1); })
+          .catch(function() { next(i + 1); });
+      }
+
+      next(0);
+    });
+
     document.dispatchEvent(new CustomEvent("devpanel:ready"));
   }
 
