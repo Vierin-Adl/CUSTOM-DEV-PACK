@@ -8,7 +8,6 @@ $sizes: (
   "970x90",
   "728x90"
 );
-
 // set wrapper size
 @each $size in $sizes {
   $x-index: str-index($size, "x");
@@ -26,30 +25,58 @@ $sizes: (
 @each $size in $sizes {
   .b#{$size} {
     .bg {
-      background-image: url("../images/banner__bg-#{$size}.webp");
+      position: absolute;
+      inset: 0;
+      background-image: url("../images/bg/#{$size}.webp");
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      opacity: 0.5;
+      z-index: 99;
+      pointer-events: none;
+      background-image: url("../images/overlay/#{$size}_1.png");
     }
   }
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  position: relative;
-}
-.banner__wrap {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
+.banner__btn {
+  position: absolute;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+  pointer-events: all;
+  transition: background-color 0.2s ease-in-out;
+
+  &-logo {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  &--1 .banner__btn-logo {
+    background-image: url("../images/logo-1.webp");
+  }
+
+  &--2 .banner__btn-logo {
+    background-image: url("../images/logo-2.webp");
+  }
+
+  &--3 .banner__btn-logo {
+    background-image: url("../images/logo-3.webp");
+  }
+
+  &.active,
+  &:hover {
+    background: red;
+  }
 }
 
-.banner_click_area * {
+.logo {
   position: absolute;
-  inset: 0;
-  background-size: contain;
-  background-repeat: no-repeat;
+  background-image: url("../images/logo.webp");
 }
 
 .b300x600 {

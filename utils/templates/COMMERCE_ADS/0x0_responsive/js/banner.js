@@ -55,6 +55,6 @@ window.addEventListener("resize", updateDim);
 
 RtbhEnabler.onDocumentReady(function () {
   updateDim();
-  initClickOverlay();
   extraInit();
+  initClicks();
 });
