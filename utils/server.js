@@ -112,6 +112,9 @@ function writeDevSettings(obj) {
 const DEV_PANEL_JS  = fs.readFileSync(path.join(__dirname, "dev-panel.js"), "utf8");
 const DEV_PANEL_TAG = "\n<script>\n" + DEV_PANEL_JS + "\n</script>\n";
 
+const DEV_OVERLAY_JS  = fs.readFileSync(path.join(__dirname, "dev-overlay.js"), "utf8");
+const DEV_OVERLAY_TAG = "\n<script>\n" + DEV_OVERLAY_JS + "\n</script>\n";
+
 const LIVE_RELOAD_SCRIPT = `
 <script>
 (function(){
@@ -173,6 +176,7 @@ function serveHtml(filePath, isPreview) {
   if (getRtbhMode() === "dev") {
     html = html.replace(/<script\s[^>]*rtbh_enabler\.js[^>]*><\/script>\n?/g, "");
     html = html.replace("</head>", RTBH_POLYFILL_TAG + "\n</head>");
+    html = html.replace("</body>", DEV_OVERLAY_TAG + "\n</body>");
   }
   if (!isPreview) {
     html = html.replace("</body>", DEV_PANEL_TAG + LIVE_RELOAD_SCRIPT + "\n</body>");

@@ -461,9 +461,15 @@
 
     var dragDepth = 0;
 
+    function isImageFile(f) {
+      if (f.type === "image/svg+xml") return false;
+      if (f.type.startsWith("image/")) return true;
+      return /\.(png|jpe?g|gif|webp|bmp|tiff?|avif|heic)$/i.test(f.name);
+    }
+
     function hasImageFiles(e) {
       return Array.prototype.some.call(e.dataTransfer.items || [], function(i) {
-        return i.kind === "file" && i.type.startsWith("image/");
+        return i.kind === "file" && (i.type.startsWith("image/") || i.type === "");
       });
     }
 
@@ -486,9 +492,7 @@
     window.addEventListener("drop", function(e) {
       e.preventDefault();
       dragDepth = 0;
-      var files = Array.prototype.filter.call(e.dataTransfer.files, function(f) {
-        return f.type.startsWith("image/") && f.type !== "image/svg+xml";
-      });
+      var files = Array.prototype.filter.call(e.dataTransfer.files, isImageFile);
       if (!files.length) { dropOverlay.style.display = "none"; return; }
 
       dropTitle.textContent = "Converting…";
@@ -503,7 +507,10 @@
             c.width = img.naturalWidth; c.height = img.naturalHeight;
             c.getContext("2d").drawImage(img, 0, 0);
             URL.revokeObjectURL(url);
-            c.toBlob(function(blob) { blob ? resolve(blob) : reject(); }, "image/webp", q);
+            c.toBlob(function(blob) {
+              c.width = 0; c.height = 0;
+              blob ? resolve(blob) : reject(new Error("toBlob returned null"));
+            }, "image/webp", q);
           };
           img.onerror = function() { URL.revokeObjectURL(url); reject(); };
           img.src = url;

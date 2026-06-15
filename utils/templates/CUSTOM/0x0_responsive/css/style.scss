@@ -26,9 +26,25 @@ $sizes: (
 @each $size in $sizes {
   .b#{$size} {
     .bg {
-      background-image: url("../images/banner__bg-#{$size}.webp");
+      background-image: url("../images/bg/#{$size}.webp");
     }
+    // .overlay {
+    //   background-image: url("../images/overlay/#{$size}.png");
+    // }
   }
+}
+.overlay {
+  position: absolute;
+  z-index: 99;
+  opacity: 0.5;
+  background-repeat: no-repeat;
+  background-size: contain;
+  inset: 0;
+}
+
+.bg {
+  position: absolute;
+  inset: 0;
 }
 
 html,
