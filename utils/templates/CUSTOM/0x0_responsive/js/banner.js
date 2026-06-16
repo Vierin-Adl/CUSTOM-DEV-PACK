@@ -25,6 +25,10 @@ var KNOWN_SIZES = [
   [970, 250],
   [970, 90],
   [728, 90],
+  [320, 100],
+  [300, 100],
+  [320, 50],
+  [300, 50],
 ];
 
 // snap to nearest known size to survive browser zoom (skews innerWidth by ±1–2px)
