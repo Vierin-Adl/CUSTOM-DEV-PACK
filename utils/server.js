@@ -53,7 +53,7 @@ function startWatcher() {
     if (filename.endsWith(".scss")) {
       clearTimeout(scssDebounce);
       scssDebounce = setTimeout(() => { compileScss(); notifyReload(); }, 80);
-    } else {
+    } else if (!/\.(webp|png|jpe?g|gif|bmp|avif|heic|tiff?)$/i.test(filename)) {
       notifyReload();
     }
   });

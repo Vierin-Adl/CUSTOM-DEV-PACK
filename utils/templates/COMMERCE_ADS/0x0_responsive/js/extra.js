@@ -84,3 +84,7 @@ function changeBtn() {
     });
   }
 }
+
+function hasBodyClass(className) {
+  return document.body.classList.contains(className);
+}
