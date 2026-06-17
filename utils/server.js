@@ -4,9 +4,9 @@
  * Run: node utils/server.js   →   http://localhost:3300/
  */
 
-const http = require("http");
-const fs   = require("fs");
-const path = require("path");
+const http   = require("http");
+const fs     = require("fs");
+const path   = require("path");
 const { exec } = require("child_process");
 
 let sass;
@@ -31,6 +31,29 @@ function compileScss() {
   } catch (err) {
     console.error("[scss] error:", err.message);
   }
+}
+
+// ── Request size tracking (mirrors Network tab) ───────────────────────────────
+const trackedFiles = new Map(); // urlPath → bytes
+
+function trackFile(urlPath, filePath) {
+  try {
+    const bytes = fs.statSync(filePath).size;
+    trackedFiles.set(urlPath, bytes);
+  } catch {}
+}
+
+function getBannerSizeStats() {
+  let bytes = 0;
+  for (const b of trackedFiles.values()) bytes += b;
+  // estimate gzip: text files compress ~70%, binary (images) ~5%
+  let gzipBytes = 0;
+  for (const [p, b] of trackedFiles) {
+    const ext = path.extname(p).toLowerCase();
+    const isText = [".html",".css",".js",".svg"].includes(ext);
+    gzipBytes += isText ? Math.round(b * 0.3) : Math.round(b * 0.97);
+  }
+  return { bytes, gzipBytes };
 }
 
 // ── Live reload (SSE) ─────────────────────────────────────────────────────────
@@ -416,6 +439,13 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // GET /api/banner-size
+  if (req.method === "GET" && urlPath === "/api/banner-size") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(getBannerSizeStats()));
+    return;
+  }
+
   // POST /api/upload-image
   if (req.method === "POST" && urlPath === "/api/upload-image") {
     let body = "";
@@ -551,6 +581,8 @@ const server = http.createServer((req, res) => {
     const indexPath = path.join(filePath, "index.html");
     if (!fs.existsSync(indexPath)) { res.writeHead(404); res.end("Not found"); return; }
     if (!urlPath.endsWith("/")) { res.writeHead(301, { Location: urlPath + "/" }); res.end(); return; }
+    trackedFiles.clear();
+    trackFile(urlPath, indexPath);
     const isPreview = urlObj.searchParams.has("preview");
     res.writeHead(200, { "Content-Type": MIME[".html"] });
     res.end(serveHtml(indexPath, isPreview));
@@ -561,8 +593,11 @@ const server = http.createServer((req, res) => {
   const ct  = MIME[ext] || "application/octet-stream";
   res.writeHead(200, { "Content-Type": ct });
   if (ext === ".html") {
+    trackedFiles.clear();
+    trackFile(urlPath, filePath);
     res.end(serveHtml(filePath, urlObj.searchParams.has("preview")));
   } else {
+    trackFile(urlPath, filePath);
     fs.createReadStream(filePath).pipe(res);
   }
 });

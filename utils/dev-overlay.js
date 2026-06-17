@@ -6,14 +6,20 @@
     ".overlay.show{display:block}";
   document.head.appendChild(style);
 
-  document.addEventListener("DOMContentLoaded", function () {
+  function initOverlay() {
     var wrap = document.querySelector(".banner__wrap");
     if (wrap && !document.querySelector(".overlay")) {
       var el = document.createElement("div");
       el.className = "overlay";
       wrap.appendChild(el);
     }
-  });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initOverlay);
+  } else {
+    initOverlay();
+  }
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "=") {

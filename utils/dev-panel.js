@@ -162,12 +162,126 @@
     #__dp .__status-dot.__on { background: #4caf6e; }
     #__dp .__status-text { color: #555; font-size: 10px; letter-spacing: .03em; }
     #__dp .__status-text.__on { color: #c8ccd4; }
+    #__weight-toast {
+      position: fixed; right: 12px; z-index: 2147483646;
+      font: 11px/1 system-ui, sans-serif;
+      background: rgba(18,20,28,0.92); border: 1px solid #2e3140;
+      border-radius: 8px; padding: 6px 8px;
+      min-width: 190px; box-sizing: border-box;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 16px rgba(0,0,0,.4);
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    #__weight-toast.__warn { border-color: #7a3030; }
+    #__weight-toast .__wt-title { color: #e0adad; font-size: 10px; letter-spacing: .04em; }
+    #__weight-toast .__wt-val { font-size: 10px; font-weight: bold; }
+    #__weight-toast .__wt-val.__warn { color: #e06060; }
+    #__weight-toast .__wt-sep { height: 1px; background: #2a2d3a; margin: 0 -2px; }
+    #__weight-toast .__wt-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    #__weight-toast .__wt-lbl { color: #e0adad; font-size: 10px; letter-spacing: .04em; }
+    #__weight-toast .__wt-num { color: #c8ccd4; font-size: 10px; }
+    #__weight-toast .__wt-num.__warn { color: #e06060; }
+    #__weight-toast .__wt-bar-bg { height: 3px; border-radius: 2px; background: #2a2d3a; overflow: hidden; }
+    #__weight-toast .__wt-bar-fill { height: 100%; border-radius: 2px; background: #4caf6e; transition: width .4s; }
+    #__weight-toast .__wt-bar-fill.__warn { background: #e06060; }
+    #__err-toast {
+      position: fixed; right: 12px; z-index: 2147483646;
+      font: 11px/1 system-ui, sans-serif;
+      background: rgba(18,20,28,0.92); border: 1px solid #7a3030;
+      border-radius: 8px; padding: 6px 8px;
+      box-sizing: border-box;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 16px rgba(0,0,0,.4);
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    #__err-toast .__et-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    #__err-toast .__et-title { color: #e0adad; font-size: 10px; letter-spacing: .04em; }
+    #__err-toast .__et-title.__has-err { color: #e06060; }
+    #__err-toast .__et-count { font-size: 10px; font-weight: bold; }
+    #__err-toast .__et-count.__err { color: #e06060; }
+    #__err-toast .__et-count.__warn { color: #e0a040; }
+    #__err-toast .__et-sep { height: 1px; background: #2a2d3a; margin: 0 -2px; }
+    #__err-toast .__et-msg { color: #c8ccd4; font-size: 10px; line-height: 1.4; word-break: break-word; white-space: pre-wrap; max-height: 60px; overflow: hidden; }
+    #__err-toast .__et-clear { color: #555; font-size: 10px; cursor: pointer; flex-shrink: 0; }
+    #__err-toast .__et-clear:hover { color: #c8ccd4; }
   `;
   document.head.appendChild(style);
 
   var panel = document.createElement("div");
   panel.id = "__dp";
   document.body.appendChild(panel);
+
+  // ── Error toast ───────────────────────────────────────
+  var _entries = []; // { type: 'error'|'warn', msg: string }
+
+  function renderErrToast() {
+    var existing = document.getElementById("__err-toast");
+    if (!_entries.length) { if (existing) existing.remove(); return; }
+    if (!existing) {
+      existing = document.createElement("div");
+      existing.id = "__err-toast";
+      document.body.appendChild(existing);
+    }
+    var errCount  = _entries.filter(function(e) { return e.type === "error"; }).length;
+    var warnCount = _entries.filter(function(e) { return e.type === "warn";  }).length;
+    var last = _entries[_entries.length - 1];
+    var countHtml = "";
+    if (errCount)  countHtml += '<span class="__et-count __err">'  + errCount  + " err"  + '</span>';
+    if (warnCount) countHtml += '<span class="__et-count __warn">' + warnCount + " warn" + '</span>';
+    existing.innerHTML =
+      '<div class="__et-header">' +
+        '<span class="__et-title' + (errCount ? " __has-err" : "") + '">Console</span>' +
+        '<div style="display:flex;gap:6px;align-items:center">' + countHtml +
+          '<span class="__et-clear" title="Clear">✕</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="__et-sep"></div>' +
+      '<div class="__et-msg" style="color:' + (last.type === "error" ? "#e06060" : "#e0a040") + '">' +
+        last.msg.replace(/</g, "&lt;") +
+      '</div>';
+    existing.querySelector(".__et-clear").onclick = function () {
+      _entries = []; renderErrToast(); positionToasts();
+    };
+    positionToasts();
+  }
+
+  function positionToasts() {
+    var panelEl = document.getElementById("__dp");
+    var weightEl = document.getElementById("__weight-toast");
+    var errEl = document.getElementById("__err-toast");
+    if (!panelEl) return;
+    var w = panelEl.getBoundingClientRect().width;
+    var top = panelEl.getBoundingClientRect().bottom + 6;
+    if (weightEl) {
+      weightEl.style.top = top + "px";
+      weightEl.style.width = w + "px";
+      weightEl.style.minWidth = "unset";
+      top += weightEl.getBoundingClientRect().height + 6;
+    }
+    if (errEl) {
+      errEl.style.top = top + "px";
+      errEl.style.width = w + "px";
+    }
+  }
+
+  function captureEntry(type, msg) {
+    _entries.push({ type: type, msg: String(msg) });
+    renderErrToast();
+  }
+
+  var _origError = console.error.bind(console);
+  console.error = function () { _origError.apply(console, arguments); captureEntry("error", Array.prototype.join.call(arguments, " ")); };
+
+  var _origWarn = console.warn.bind(console);
+  console.warn = function () { _origWarn.apply(console, arguments); captureEntry("warn", Array.prototype.join.call(arguments, " ")); };
+
+  window.addEventListener("error", function (e) {
+    captureEntry("error", (e.message || "Unknown error") + (e.filename ? "\n" + e.filename.split("/").pop() + ":" + e.lineno : ""));
+  });
+
+  window.addEventListener("unhandledrejection", function (e) {
+    captureEntry("error", "Unhandled promise: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
+  });
 
   // ── DOM helpers ───────────────────────────────────────
   function mkRow()  { var d = document.createElement("div"); d.className = "__row";  return d; }
@@ -372,7 +486,55 @@
       btnProd.className = "__mode-btn" + (RTBH_MODE === "prod" ? " __active-prod" : "");
     }
     applyModeStyle();
-    function setMode(m) { RTBH_MODE = m; applyModeStyle(); saveSettings().then(function () { location.reload(); }); }
+    function showWeightToast() {
+      var LIMIT_MB = BANNER_TYPE === "interstitial" ? 3 : 2;
+      fetch("/api/banner-size", { cache: "no-store" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var bytes     = data.bytes     || 0;
+          var gzipBytes = data.gzipBytes || 0;
+          var mbRaw  = bytes     / (1024 * 1024);
+          var mbGzip = gzipBytes / (1024 * 1024);
+          var warn   = mbRaw > LIMIT_MB;
+          var ratio  = Math.min(mbRaw / LIMIT_MB, 1.5);
+          function fmt(mb) {
+            return mb >= 1 ? mb.toFixed(2) + " MB" : (mb * 1024).toFixed(0) + " kB";
+          }
+          var existing = document.getElementById("__weight-toast");
+          if (existing) existing.remove();
+          var toast = document.createElement("div");
+          toast.id = "__weight-toast";
+          if (warn) toast.classList.add("__warn");
+          toast.innerHTML =
+            '<div class="__wt-row">' +
+              '<span class="__wt-lbl">WEIGHT</span>' +
+              (warn ? '<span class="__wt-val __warn">⚠ exceeded</span>' : '') +
+            '</div>' +
+            '<div class="__wt-sep"></div>' +
+            '<div class="__wt-row">' +
+              '<span class="__wt-lbl">transferred</span>' +
+              '<span class="__wt-num' + (warn ? " __warn" : "") + '">' + fmt(mbGzip) + '</span>' +
+            '</div>' +
+            '<div class="__wt-row">' +
+              '<span class="__wt-lbl">resources</span>' +
+              '<span class="__wt-num">' + fmt(mbRaw) + ' / ' + LIMIT_MB + ' MB</span>' +
+            '</div>' +
+            '<div class="__wt-sep"></div>' +
+            '<div class="__wt-bar-bg">' +
+              '<div class="__wt-bar-fill' + (warn ? " __warn" : "") + '" style="width:' + Math.min(ratio * 100, 100) + '%"></div>' +
+            '</div>';
+          document.body.appendChild(toast);
+          positionToasts();
+        })
+        .catch(function () {});
+    }
+
+    function setMode(m) {
+      RTBH_MODE = m;
+      applyModeStyle();
+      showWeightToast();
+      saveSettings().then(function () { location.reload(); });
+    }
     btnDev.onclick  = function () { if (RTBH_MODE !== "dev")  setMode("dev"); };
     btnProd.onclick = function () { if (RTBH_MODE !== "prod") setMode("prod"); };
     modeToggle.appendChild(btnDev); modeToggle.appendChild(btnProd);
@@ -551,6 +713,8 @@
 
       next(0);
     });
+
+    showWeightToast();
 
     document.dispatchEvent(new CustomEvent("devpanel:ready"));
   }
