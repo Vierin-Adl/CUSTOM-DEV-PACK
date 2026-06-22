@@ -43,6 +43,23 @@ function trackFile(urlPath, filePath) {
   } catch {}
 }
 
+// ── Missing-asset (404) tracking — surfaced in the dev panel ──────────────────
+// The panel's client-side error listener only sees 404s on <img>/<script>/
+// <link>/<source>. Assets referenced from CSS (background-image, @font-face)
+// 404 silently in the DOM, so we record them here where every request is seen.
+let missing404 = new Map(); // urlPath → count
+// Browser/devtools probes that 404 by design — never real asset bugs.
+const IGNORE_MISSING = [
+  "/favicon.ico",
+  "/.well-known/",            // e.g. /.well-known/appspecific/com.chrome.devtools.json
+  "/apple-touch-icon",       // iOS Safari icon probes
+  "/robots.txt",
+];
+function recordMissing(urlPath) {
+  if (IGNORE_MISSING.some(function (p) { return urlPath === p || urlPath.indexOf(p) === 0; })) return;
+  missing404.set(urlPath, (missing404.get(urlPath) || 0) + 1);
+}
+
 function getBannerSizeStats() {
   let bytes = 0;
   for (const b of trackedFiles.values()) bytes += b;
@@ -446,6 +463,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // GET /api/missing — 404'd assets since the last page load (incl. CSS-referenced)
+  if (req.method === "GET" && urlPath === "/api/missing") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      items: Array.from(missing404, ([url, count]) => ({ url, count })),
+    }));
+    return;
+  }
+
   // POST /api/upload-image
   if (req.method === "POST" && urlPath === "/api/upload-image") {
     let body = "";
@@ -572,6 +598,7 @@ const server = http.createServer((req, res) => {
   // Static files
   const filePath = path.join(ROOT, urlPath);
   if (!filePath.startsWith(ROOT) || !fs.existsSync(filePath)) {
+    if (req.method === "GET") recordMissing(urlPath);
     res.writeHead(404);
     res.end("Not found");
     return;
@@ -579,9 +606,10 @@ const server = http.createServer((req, res) => {
 
   if (fs.statSync(filePath).isDirectory()) {
     const indexPath = path.join(filePath, "index.html");
-    if (!fs.existsSync(indexPath)) { res.writeHead(404); res.end("Not found"); return; }
+    if (!fs.existsSync(indexPath)) { if (req.method === "GET") recordMissing(urlPath); res.writeHead(404); res.end("Not found"); return; }
     if (!urlPath.endsWith("/")) { res.writeHead(301, { Location: urlPath + "/" }); res.end(); return; }
     trackedFiles.clear();
+    missing404.clear();
     trackFile(urlPath, indexPath);
     const isPreview = urlObj.searchParams.has("preview");
     res.writeHead(200, { "Content-Type": MIME[".html"] });
@@ -594,6 +622,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": ct });
   if (ext === ".html") {
     trackedFiles.clear();
+    missing404.clear();
     trackFile(urlPath, filePath);
     res.end(serveHtml(filePath, urlObj.searchParams.has("preview")));
   } else {

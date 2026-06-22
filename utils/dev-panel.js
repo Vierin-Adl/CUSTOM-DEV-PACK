@@ -260,6 +260,8 @@
         last.msg.replace(/</g, "&lt;") +
       '</div>';
     existing.querySelector(".__et-clear").onclick = function () {
+      // Keep _reported404 intact so the server poll doesn't re-add the same
+      // 404s a few seconds later — they reset naturally on the next page load.
       _entries = []; renderErrToast(); positionToasts();
     };
     positionToasts();
@@ -289,6 +291,28 @@
     renderErrToast();
   }
 
+  // Dedupe 404s across the two sources: the DOM error listener (img/script/
+  // link/source) and the server poll (/api/missing — catches CSS-referenced
+  // assets like background-image / @font-face that fire no DOM error).
+  var _reported404 = {};
+  function report404(url) {
+    if (!url || _reported404[url]) return;
+    _reported404[url] = true;
+    captureEntry("error", "404 " + url);
+  }
+
+  // Poll the server for assets that 404'd since the last page load. The server
+  // resets its list on each HTML load; report404's dedupe keeps each one shown
+  // only once for the life of the page.
+  function pollMissing() {
+    fetch("/api/missing", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        (data.items || []).forEach(function (it) { report404(it.url); });
+      })
+      .catch(function () {});
+  }
+
   var _origError = console.error.bind(console);
   console.error = function () { _origError.apply(console, arguments); captureEntry("error", Array.prototype.join.call(arguments, " ")); };
 
@@ -299,7 +323,7 @@
     var t = e.target;
     if (t && (t.tagName === "IMG" || t.tagName === "SCRIPT" || t.tagName === "LINK" || t.tagName === "SOURCE")) {
       var src = t.src || t.href || (t.srcset && t.srcset.split(" ")[0]) || "?";
-      captureEntry("error", "404 " + src.replace(location.origin, ""));
+      report404(src.replace(location.origin, ""));
     } else {
       captureEntry("error", (e.message || "Unknown error") + (e.filename ? "\n" + e.filename.split("/").pop() + ":" + e.lineno : ""));
     }
@@ -768,6 +792,14 @@
     });
 
     showWeightToast();
+
+    // Surface 404s the DOM error listener can't see (CSS background-image,
+    // @font-face, etc.). Assets load async, so poll a few times after load,
+    // then keep a slow heartbeat for late/lazy requests.
+    pollMissing();
+    setTimeout(pollMissing, 400);
+    setTimeout(pollMissing, 1500);
+    setInterval(pollMissing, 3000);
 
     document.dispatchEvent(new CustomEvent("devpanel:ready"));
   }
