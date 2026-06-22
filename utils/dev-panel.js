@@ -18,6 +18,26 @@
   var interstitialSizes = [];
   var sizeSelect, addInput;
 
+  // ── Lock banner size detection to the dev-panel selection ──────────────
+  // banner.js's updateDim() derives the <body> size class from the browser
+  // window dimensions. In the preview window that's almost never the selected
+  // creative size, so extraInit() (which runs once on DOMContentLoaded and
+  // reads hasBodyClass()) picks the wrong layout/animation branch.
+  // We override updateDim() *synchronously*, before DOMContentLoaded fires, so
+  // extraInit() sees the correct class. Banner scripts are left untouched.
+  var _dimLocked = false;
+  (function lockUpdateDim() {
+    var saved = localStorage.getItem("__dp_size");
+    if (saved && /^\d+x\d+$/.test(saved) && typeof updateDim === "function") {
+      window.updateDim = function () { document.body.className = "b" + saved; };
+      _dimLocked = true;
+      // banner.js registered its resize handler with the original updateDim
+      // reference, so reassigning window.updateDim doesn't stop it from
+      // clobbering the class on resize. Re-apply the locked size afterwards.
+      window.addEventListener("resize", function () { window.updateDim(); });
+    }
+  })();
+
   // ── Styles ────────────────────────────────────────────
   var style = document.createElement("style");
   style.textContent = `
@@ -276,8 +296,14 @@
   console.warn = function () { _origWarn.apply(console, arguments); captureEntry("warn", Array.prototype.join.call(arguments, " ")); };
 
   window.addEventListener("error", function (e) {
-    captureEntry("error", (e.message || "Unknown error") + (e.filename ? "\n" + e.filename.split("/").pop() + ":" + e.lineno : ""));
-  });
+    var t = e.target;
+    if (t && (t.tagName === "IMG" || t.tagName === "SCRIPT" || t.tagName === "LINK" || t.tagName === "SOURCE")) {
+      var src = t.src || t.href || (t.srcset && t.srcset.split(" ")[0]) || "?";
+      captureEntry("error", "404 " + src.replace(location.origin, ""));
+    } else {
+      captureEntry("error", (e.message || "Unknown error") + (e.filename ? "\n" + e.filename.split("/").pop() + ":" + e.lineno : ""));
+    }
+  }, true);
 
   window.addEventListener("unhandledrejection", function (e) {
     captureEntry("error", "Unhandled promise: " + (e.reason && e.reason.message ? e.reason.message : e.reason));
@@ -334,13 +360,26 @@
     if (!/^\d+x\d+$/.test(val)) { addInput.style.borderColor = "#e05c5c"; return; }
     addInput.style.borderColor = "";
     var arr = activeArr();
-    if (arr.indexOf(val) !== -1) { sizeSelect.value = val; setSize(val); return; }
+    var reloadAfter = BANNER_TYPE !== "interstitial";
+    if (arr.indexOf(val) !== -1) {
+      sizeSelect.value = val;
+      setSize(val);
+      if (reloadAfter) location.reload();
+      return;
+    }
     arr.push(val);
     rebuildSizeOptions();
     sizeSelect.value = val;
     setSize(val);
     addInput.value = "";
-    saveSettings();
+    // setSize() already wrote __dp_size; reload only after the new size is
+    // persisted to settings.json so it survives the reload.
+    var saved = saveSettings();
+    if (reloadAfter) {
+      (saved && saved.then ? saved : Promise.resolve()).then(function () {
+        location.reload();
+      });
+    }
   }
 
   function saveSettings() {
@@ -582,8 +621,15 @@
 
     // wire size
     sizeSelect.onchange = function () {
-      setSize(sizeSelect.value);
-      if (type !== "interstitial") updatePreviewUrl();
+      if (type === "interstitial") {
+        setSize(sizeSelect.value);
+        return;
+      }
+      // Persist the selection and reload: extraInit() runs only once on load,
+      // so a fresh load (with updateDim() locked to the new size) is what
+      // re-runs the size-specific animation branch correctly.
+      localStorage.setItem("__dp_size", sizeSelect.value);
+      location.reload();
     };
     rebuildSizeOptions();
     var arr = activeArr();
@@ -592,6 +638,13 @@
       var initial = (saved && arr.indexOf(saved) !== -1) ? saved : arr[0];
       sizeSelect.value = initial;
       setSize(initial);
+      // First load with no prior selection: updateDim() wasn't locked, so
+      // extraInit() already ran against the window-derived class. Reload once
+      // now that __dp_size is set — the lock then feeds the right class.
+      if (type !== "interstitial" && !_dimLocked) {
+        location.reload();
+        return;
+      }
     } else if (typeof updateDim === "function") {
       updateDim();
     }
