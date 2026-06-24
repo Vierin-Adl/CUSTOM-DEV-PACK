@@ -25,11 +25,18 @@
   // reads hasBodyClass()) picks the wrong layout/animation branch.
   // We override updateDim() *synchronously*, before DOMContentLoaded fires, so
   // extraInit() sees the correct class. Banner scripts are left untouched.
+  // The banner writes its size class to [data-area="banner"] (banner.js's
+  // updateDim). Older templates / interstitial / scroll have no such element,
+  // so fall back to <body> — keeps their behaviour unchanged.
+  function sizeClassTarget() {
+    return document.querySelector('[data-area="banner"]') || document.body;
+  }
+
   var _dimLocked = false;
   (function lockUpdateDim() {
     var saved = localStorage.getItem("__dp_size");
     if (saved && /^\d+x\d+$/.test(saved) && typeof updateDim === "function") {
-      window.updateDim = function () { document.body.className = "b" + saved; };
+      window.updateDim = function () { sizeClassTarget().className = "b" + saved; };
       _dimLocked = true;
       // banner.js registered its resize handler with the original updateDim
       // reference, so reassigning window.updateDim doesn't stop it from
@@ -355,10 +362,11 @@
       return;
     }
 
-    var orientClass = document.body.classList.contains("land") ? "land"
-                    : document.body.classList.contains("vert") ? "vert" : null;
-    document.body.className = "b" + size;
-    if (orientClass) document.body.classList.add(orientClass);
+    var target = sizeClassTarget();
+    var orientClass = target.classList.contains("land") ? "land"
+                    : target.classList.contains("vert") ? "vert" : null;
+    target.className = "b" + size;
+    if (orientClass) target.classList.add(orientClass);
     var wPx = w + "px", hPx = h + "px";
     var scroller = document.querySelector('[data-item="inread-root"]');
     if (scroller) { scroller.style.width = wPx; scroller.style.height = hPx; }
@@ -665,7 +673,11 @@
       // First load with no prior selection: updateDim() wasn't locked, so
       // extraInit() already ran against the window-derived class. Reload once
       // now that __dp_size is set — the lock then feeds the right class.
-      if (type !== "interstitial" && !_dimLocked) {
+      // scroll_banner has no banner.js/updateDim(), so _dimLocked can never
+      // flip true — reloading here would loop forever. Skip it (and any
+      // template without updateDim, which has nothing to lock anyway).
+      if (type !== "interstitial" && type !== "scroll_banner" &&
+          typeof updateDim === "function" && !_dimLocked) {
         location.reload();
         return;
       }

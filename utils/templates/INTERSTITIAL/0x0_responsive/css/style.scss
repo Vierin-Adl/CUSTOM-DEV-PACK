@@ -1,37 +1,3 @@
-// ── Reset ─────────────────────────────────────────────────────────────────────
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-a {
-  text-decoration: none;
-  color: inherit;
-}
-
-// ── Base ──────────────────────────────────────────────────────────────────────
-html,
-body {
-  height: 100%;
-  overflow: hidden;
-  margin: 0;
-}
-
-body {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-// ── Click overlay ─────────────────────────────────────────────────────────────
-.banner_click_area {
-  position: fixed;
-  inset: 0;
-  cursor: pointer;
-  z-index: 9999;
-}
-
 // ── Banner wrapper ────────────────────────────────────────────────────────────
 .banner__wrapper {
   position: relative;

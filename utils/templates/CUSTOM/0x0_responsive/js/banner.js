@@ -46,11 +46,20 @@ function snapSize(w, h) {
   return best;
 }
 
+var bannerEl = null;
+
 function updateDim() {
-  var w = Math.round(window.innerWidth);
-  var h = Math.round(window.innerHeight);
+  if (!bannerEl) bannerEl = document.querySelector('[data-area="banner"]');
+  if (!bannerEl) return;
+  var w = document.documentElement.clientWidth || window.innerWidth;
+  var h = document.documentElement.clientHeight || window.innerHeight;
   var size = snapSize(w, h);
-  document.body.className = "b" + size[0] + "x" + size[1];
+  var newClass = "b" + size[0] + "x" + size[1];
+  var kept = bannerEl.className.split(/\s+/).filter(function (c) {
+    return c && !/^b\d+x\d+$/.test(c);
+  });
+  kept.push(newClass);
+  bannerEl.className = kept.join(" ");
 }
 
 window.addEventListener("resize", updateDim);

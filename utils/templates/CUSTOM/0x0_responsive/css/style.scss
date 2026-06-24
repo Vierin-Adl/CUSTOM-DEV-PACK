@@ -47,33 +47,5 @@ $sizes: (
   inset: 0;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.banner__wrap {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.banner_click_area {
-  position: absolute;
-  inset: 0;
-  pointer-events: all;
-  cursor: pointer;
-}
-
-body * {
-  background-size: contain;
-  background-repeat: no-repeat;
-}
-
 .b300x600 {
 }

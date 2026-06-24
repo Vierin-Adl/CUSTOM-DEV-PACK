@@ -9,16 +9,24 @@ if (typeof RtbhEnabler === "undefined") {
     },
     open: function (url) {
       if (url) window.open(url, "_blank");
-    }
+    },
   };
 }
 
 // ─── Orientation ──────────────────────────────────────────────────────────────
 
 function updateDim() {
-  var dim = window.innerWidth > window.innerHeight ? "land" : "vert";
-  document.body.classList.remove("land", "vert");
-  document.body.classList.add(dim);
+  if (!bannerEl) bannerEl = document.querySelector('[data-area="banner"]');
+  if (!bannerEl) return;
+  var w = document.documentElement.clientWidth || window.innerWidth;
+  var h = document.documentElement.clientHeight || window.innerHeight;
+
+  var newClass = w > h ? "land" : "vert";
+  var kept = bannerEl.className.split(/\s+/).filter(function (c) {
+    return c && !/^b\d+x\d+$/.test(c);
+  });
+  kept.push(newClass);
+  bannerEl.className = kept.join(" ");
 }
 
 window.addEventListener("resize", updateDim);
