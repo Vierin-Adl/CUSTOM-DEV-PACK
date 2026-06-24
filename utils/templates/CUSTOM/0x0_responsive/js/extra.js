@@ -23,6 +23,7 @@ function extraInit() {
   });
 }
 
-function hasBodyClass(className) {
-  return document.body.classList.contains(className);
+function hasSizeClass(className) {
+  var target = document.querySelector('[data-area="banner"]');
+  return target?.classList.contains(className);
 }

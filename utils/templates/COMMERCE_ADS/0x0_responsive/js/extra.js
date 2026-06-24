@@ -50,7 +50,7 @@ function extraInit() {
 // auto change active class in buttons
 function changeBtn() {
   const btns = document.querySelectorAll(".banner__btn");
-  const banner = document.querySelector("body");
+  const banner = document.querySelector('[data-area="banner"]');
   if (btns.length === 0) return;
 
   let index = 0;
@@ -85,6 +85,7 @@ function changeBtn() {
   }
 }
 
-function hasBodyClass(className) {
-  return document.body.classList.contains(className);
+function hasSizeClass(className) {
+  var target = document.querySelector('[data-area="banner"]');
+  return target?.classList.contains(className);
 }
