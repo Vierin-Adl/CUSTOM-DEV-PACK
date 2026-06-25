@@ -14,6 +14,7 @@ if (typeof RtbhEnabler === "undefined") {
 }
 
 // ─── Orientation ──────────────────────────────────────────────────────────────
+var bannerEl = null;
 
 function updateDim() {
   if (!bannerEl) bannerEl = document.querySelector('[data-area="banner"]');
