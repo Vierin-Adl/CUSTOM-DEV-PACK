@@ -685,7 +685,7 @@
       updateDim();
     }
 
-    // ── Drop-to-WebP overlay ──────────────────────────────
+    // ── Drop-to-Optimize overlay ──────────────────────────
     var dropOverlay = document.createElement("div");
     dropOverlay.style.cssText = [
       "display:none;position:fixed;inset:0;z-index:2147483646",
@@ -696,7 +696,7 @@
 
     var dropTitle = document.createElement("div");
     dropTitle.style.cssText = "font-size:28px;font-weight:700;color:#fff;letter-spacing:-.02em";
-    dropTitle.textContent = "Drop → WebP";
+    dropTitle.textContent = "Drop → Optimize";
 
     var dropSub = document.createElement("div");
     dropSub.style.cssText = "font-size:13px;color:#5b8dee;letter-spacing:.03em;margin-top:2px";
@@ -713,9 +713,8 @@
     var dragDepth = 0;
 
     function isImageFile(f) {
-      if (f.type === "image/svg+xml") return false;
-      if (f.type.startsWith("image/")) return true;
-      return /\.(png|jpe?g|gif|webp|bmp|tiff?|avif|heic)$/i.test(f.name);
+      return f.type === "image/png" || f.type === "image/jpeg" ||
+             /\.(png|jpe?g)$/i.test(f.name);
     }
 
     function hasImageFiles(e) {
@@ -728,7 +727,7 @@
       if (!hasImageFiles(e)) return;
       dragDepth++;
       dropStatus.textContent = "";
-      dropTitle.textContent = "Drop → WebP";
+      dropTitle.textContent = "Drop → Optimize";
       dropTitle.style.color = "#fff";
       dropOverlay.style.display = "flex";
     });
@@ -749,19 +748,27 @@
       dropTitle.textContent = "Converting…";
       dropSub.textContent = "0 / " + files.length;
 
-      function convertToWebp(file, q) {
+      // Re-encode in the SAME format (no WebP conversion). JPEG honours the
+      // quality arg (real optimization); PNG is lossless so it may not shrink —
+      // next() keeps the original if the re-encode isn't smaller.
+      function optimizeImage(file, q) {
         return new Promise(function(resolve, reject) {
+          var isJpg = file.type === "image/jpeg" || /\.jpe?g$/i.test(file.name);
+          var mime  = isJpg ? "image/jpeg" : "image/png";
           var img = new Image();
           var url = URL.createObjectURL(file);
           img.onload = function() {
             var c = document.createElement("canvas");
             c.width = img.naturalWidth; c.height = img.naturalHeight;
-            c.getContext("2d").drawImage(img, 0, 0);
+            var ctx = c.getContext("2d");
+            // JPEG has no alpha — flatten transparency onto white, not black.
+            if (isJpg) { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); }
+            ctx.drawImage(img, 0, 0);
             URL.revokeObjectURL(url);
             c.toBlob(function(blob) {
               c.width = 0; c.height = 0;
               blob ? resolve(blob) : reject(new Error("toBlob returned null"));
-            }, "image/webp", q);
+            }, mime, q);
           };
           img.onerror = function() { URL.revokeObjectURL(url); reject(); };
           img.src = url;
@@ -785,15 +792,17 @@
           return;
         }
         var file = files[i];
-        var name = file.name.replace(/\.[^.]+$/, ".webp");
-        dropSub.textContent = (i + 1) + " / " + files.length + "  —  " + name;
-        convertToWebp(file, 0.85)
-          .then(toBase64)
+        dropSub.textContent = (i + 1) + " / " + files.length + "  —  " + file.name;
+        optimizeImage(file, 0.85)
+          .then(function(blob) {
+            // Keep the original if the re-encode didn't actually save bytes.
+            return toBase64(blob.size < file.size ? blob : file);
+          })
           .then(function(b64) {
             return fetch("/api/upload-image", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: name, data: b64 }),
+              body: JSON.stringify({ name: file.name, data: b64 }),
             });
           })
           .then(function() { next(i + 1); })
