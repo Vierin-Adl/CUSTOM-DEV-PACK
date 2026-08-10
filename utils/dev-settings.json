@@ -1,10 +1,13 @@
 {
-  "RTBH_MODE": "dev",
+  "RTBH_MODE": "prod",
   "INTERSTITIAL_PREVIEW_SIZES": [
     "768x1024",
-    "1024x768"
+    "1024x768",
+    "720x1280",
+    "1280x720"
   ],
+  "CTV_MINIMIZE_DELAY_MS": 1000,
   "CURRENT_PROJECT": {
-    "type": "scroll_banner"
+    "type": "ctv"
   }
 }

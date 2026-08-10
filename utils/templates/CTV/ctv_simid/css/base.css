@@ -1,0 +1,142 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   base.css — CTV scaffolding shared by every interactive creative
+                                                   (loaded before style.css)
+
+   Everything here belongs to the format, not to this particular ad: the design
+   tokens, the page reset, and the two layers the SDK drives —
+   #videoOverlay (the duplicated spot) and .video-content (the stage that
+   flips between fullscreen video and the minimized banner).
+
+   Creative-specific geometry, artwork and reveal choreography live in
+   main.scss. Hand-edit this file; it is not compiled from SCSS.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --interactive-space-2xs: 0.45vmin;
+  --interactive-space-xs: 0.75vmin;
+  --interactive-space-sm: 0.95vmin;
+  --interactive-space-md: 1.3vmin;
+  --interactive-space-lg: 1.7vmin;
+  --interactive-side-padding: 0.9vmin;
+  --interactive-radius-sm: 1.1vmin;
+  --interactive-radius-md: 1.7vmin;
+  --interactive-focus-width: 0.18vmin;
+  --interactive-focus-offset: 0vmin;
+  --interactive-blur: 0.4vmin;
+  --interactive-dot-size: 0.85vmin;
+  --interactive-dot-gap: 0.75vmin;
+  --interactive-dot-margin-top: 1.3vmin;
+  --interactive-dot-bottom-space: 1.05vmin;
+  --interactive-qr-size: 12.35vmin;
+  --interactive-side-width: min(37.1%, 25.2vw);
+  --interactive-cta-width: min(29%, 20vw);
+  --interactive-logo-width: 10.8%;
+  --interactive-copy-sm: 2.4vmin;
+  --interactive-copy-lg: 2.95vmin;
+  --interactive-slider-title-size: 2.82vmin;
+  --interactive-slider-body-size: 1.82vmin;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family:
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Arial,
+    sans-serif;
+}
+
+/* Interactive layer — un-hidden by LayoutController.show() on init. */
+.body-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background-blend-mode: screen, normal;
+}
+
+.body-inner.hidden {
+  display: none;
+}
+
+/* === Overlay layer === */
+#videoOverlay {
+  position: fixed;
+  height: 100%;
+  width: 100%;
+  left: 0%;
+  top: 0%;
+  background-color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  z-index: 10000;
+  /* Animate transform (GPU-composited) rather than top/left/width/height,
+       which forced a full relayout + repaint of the video subtree every frame. */
+  transform-origin: 0 0;
+  transform: none;
+  transition: transform 0.3s ease-in-out;
+  /* Isolate this fixed subtree from the rest of the document's layout and
+       paint — the browser can skip it when repainting other content. */
+  contain: layout paint;
+}
+
+#videoOverlay video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #000;
+  /* Video is purely visual — no pointer interaction, selection, or cursor. */
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#videoOverlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* === Stage === */
+/* Make container relative to position child elements correctly */
+.video-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+}
+
+/* Banner starts hidden and non-interactive — the overlay owns the screen. */
+.video-content .banner__wrapper {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  z-index: 10;
+}
+
+/* === Animate in when minimized === */
+.video-content.is_minimize .banner__wrapper {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(0, 0);
+}
+
+/* Animate out when restoring fullscreen */
+.video-content:not(.is_minimize) .banner__wrapper {
+  opacity: 0;
+  transition-delay: 0s;
+}

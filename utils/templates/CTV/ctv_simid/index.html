@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Interactive Creative</title>
+
+    <link rel="stylesheet" href="css/base.css" type="text/css" media="all">
+    <link rel="stylesheet" href="css/style.css" type="text/css" media="all">
+
+    <!-- RTBH SDK (auto-detects SIMID/VPAID from URL ?type= param) -->
+    <script src="rtbh_video_interactive_sdk.dev.js"></script>
+    <script>
+        // Keep debug OFF in production. Enabling it logs every SIMID message
+        // (incl. ~4 Media:timeupdate/sec) + builds the HUD — continuous
+        // main-thread CPU + growing memory. Debug + HUD are still available on
+        // demand: add ?debug=1 to the URL (the SDK auto-enables both).
+        var CREATIVE_DEBUG = false;
+        if (CREATIVE_DEBUG && window.RtbhVideoInteractiveSdk) {
+            window.RtbhVideoInteractiveSdk.debug.enable();
+        }
+    </script>
+
+</head>
+
+<body>
+
+    <div class="body-inner hidden">
+
+        <div class="video-content">
+            <!-- <div class="overlay"></div> -->
+            <div class="banner__wrapper hidden">
+                <div class="banner__bg"></div>
+                <div class="banner__img">
+                    <div class="banner__img-track slider-track">
+                        <div class="slide banner__img-1 banner__img-item">
+                            <div class="slide__btn"></div>
+                        </div>
+                        <div class="slide banner__img-2 banner__img-item">
+                            <div class="slide__btn"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="banner__arrow-prev banner__arrow banner__controls"></div>
+                <div class="banner__arrow-next banner__arrow banner__controls"></div>
+
+                <div class="banner__logo"></div>
+                <div class="banner__icon-1 banner__icon"></div>
+                <div class="banner__txt-1 banner__txt"></div>
+                <div class="banner__icon-2 banner__icon"></div>
+                <div class="banner__txt-2 banner__txt"></div>
+
+                <div class="banner__remote"></div>
+                <div class="banner__remote-arrow banner__remote-arrow--next"><span></span></div>
+                <div class="banner__remote-arrow banner__remote-arrow--prev"><span></span></div>
+
+                <div class="banner__txt-date-1 banner__txt-date"></div>
+                <div class="banner__txt-date-2 banner__txt-date"></div>
+            </div>
+
+            <div class="banner__thumb">
+                <div class="banner__thumb-icon"><span></span></div>
+            </div>
+
+            <!-- Fullscreen black overlay with duplicated video -->
+            <div id="videoOverlay" class="hidden">
+                <video id="overlayVideo" muted playsinline></video>
+            </div>
+        </div>
+
+    </div>
+
+
+    <!-- Vendor / third-party only -->
+    <script src="js/vendor/qrcode-generator_2.4.js"></script>
+
+    <!-- Creative layer: DOM, visuals, focus, slider, QR -->
+    <script src="js/creative/layout.js"></script>
+    <script src="js/creative/qr-view.js"></script>
+    <script src="js/creative/remote-navigation.js"></script>
+    <script src="js/creative/slider.js"></script>
+    <script src="js/creative/index.js"></script>
+
+    <!-- SDK / transport layer: SIMID, VPAID, RtbhVideoInteractiveSdk -->
+    <!-- Must stay synchronous so VPAID init is not missed -->
+    <script src="js/sdk/transport.js"></script>
+
+
+    <!-- ADTRACKER — BrandLift survey analytics (loaded dynamically by app.js in survey mode) -->
+    <script>
+        var adTrackerConfig = null;
+
+        function initAdTracker(adParams) {
+            try {
+                if (!adParams) return;
+                if (!adParams.impressionHash && !adParams.advertiserHash) return;
+
+                adTrackerConfig = {
+                    IH: adParams.impressionHash || '',
+                    AH: adParams.advertiserHash || '',
+                    SH: adParams.campaignHash   || '',
+                    CH: adParams.creativeHash   || '',
+                    BT: 'INTERACTIVE_CTV',
+                    heatmap: true,
+                    interactions: [],
+                    tracks: true
+                };
+
+                // Dynamically load adtracker.min.js
+                var s = document.createElement('script');
+                s.src = 'https://statics.creativecdn.com/20250523/adtracker.min.js';
+                s.onload = function () {
+                    if (typeof ADTRACKER === 'function' && adTrackerConfig) {
+                        ADTRACKER(adTrackerConfig);
+                    }
+                };
+                document.body.appendChild(s);
+            } catch (e) {
+                console.warn('[QrLiftApp] initAdTracker failed:', e);
+            }
+        }
+
+        function notifyAdTrackerReady() {
+            if (typeof ADTRACKER === 'function' && adTrackerConfig) {
+                try { ADTRACKER(adTrackerConfig); } catch (e) {}
+            }
+        }
+    </script>
+
+</body>
+
+</html>

@@ -15,19 +15,78 @@ try { sass = require("sass"); } catch { /* will warn at startup */ }
 const PORT          = 3300;
 const ROOT          = path.join(__dirname, "..");
 const TEMPLATES_DIR = path.join(__dirname, "templates");
-const WORK_DIR      = path.join(ROOT, "0x0_responsive");
-const SCSS_PATH     = path.join(WORK_DIR, "css/style.scss");
-const CSS_PATH      = path.join(WORK_DIR, "css/style.css");
 const SETTINGS_PATH     = path.join(ROOT, "settings.json");
 const DEV_SETTINGS_PATH = path.join(__dirname, "dev-settings.json");
 
+// ── Banner types ──────────────────────────────────────────────────────────────
+// One entry per type offered in the dev panel's TYPE dropdown. The type name is
+// also the template folder (upper-cased): utils/templates/<TYPE>/<folder>/.
+//
+//   folder        working dir created by START — also the folder you upload to
+//                 Adturbo, so it must match what the ad server expects
+//   entry         where START / "/" send the browser
+//   scss          SCSS entry point the server compiles on save (null = none).
+//                 Output is the same path with a .css extension.
+//   sizes         SIZE dropdown is backed by settings.json FLUID_CREATIVE_SIZES
+//   rtbhEnabler   HTML uses rtbh_enabler.js → DEV/PROD toggle + dev stub apply
+//   weightLimitMb WEIGHT toast threshold
+const TYPES = {
+  custom:        { folder: "0x0_responsive", entry: "/0x0_responsive/", scss: "css/style.scss", sizes: true,  rtbhEnabler: true,  weightLimitMb: 2 },
+  scroll_banner: { folder: "0x0_responsive", entry: "/0x0_responsive/", scss: "css/style.scss", sizes: true,  rtbhEnabler: true,  weightLimitMb: 2 },
+  commerce_ads:  { folder: "0x0_responsive", entry: "/0x0_responsive/", scss: "css/style.scss", sizes: true,  rtbhEnabler: true,  weightLimitMb: 2 },
+  interstitial:  { folder: "0x0_responsive", entry: "/0x0_responsive/", scss: "css/style.scss", sizes: false, rtbhEnabler: true,  weightLimitMb: 3 },
+  // CTV SIMID/VPAID creative. No fixed sizes (16:9 fullscreen, vmin/% layout),
+  // no rtbh_enabler — it is driven by the video player, so it renders inside
+  // the mock player at /ctv-preview instead of being opened directly.
+  ctv:           { folder: "ctv_simid",      entry: "/ctv-preview",     scss: "css/style.scss", sizes: false, rtbhEnabler: false, weightLimitMb: 3 },
+};
+const DEFAULT_TYPE = "custom";
+
+function typeCfg(type) {
+  return TYPES[type] || TYPES[DEFAULT_TYPE];
+}
+
+function workDirFor(type) {
+  return path.join(ROOT, typeCfg(type).folder);
+}
+
+function templateDirFor(type) {
+  return path.join(TEMPLATES_DIR, String(type).toUpperCase(), typeCfg(type).folder);
+}
+
+// Active project = the type in dev-settings.json whose working dir exists.
+// If dev-settings drifted (folder deleted or restored by hand) fall back to
+// whatever working folder is actually on disk.
+function detectProject() {
+  const saved = (readDevSettings().CURRENT_PROJECT || {}).type;
+  if (saved && fs.existsSync(workDirFor(saved))) return { type: saved };
+  for (const type of Object.keys(TYPES)) {
+    if (fs.existsSync(workDirFor(type))) return { type };
+  }
+  return null;
+}
+
+function activeWorkDir() {
+  const project = detectProject();
+  return project ? workDirFor(project.type) : null;
+}
+
 // ── SCSS compile ──────────────────────────────────────────────────────────────
+function scssPathFor(type) {
+  const entry = typeCfg(type).scss;
+  return entry ? path.join(workDirFor(type), entry) : null;
+}
+
 function compileScss() {
-  if (!sass || !fs.existsSync(SCSS_PATH)) return;
+  const project = detectProject();
+  if (!sass || !project) return;
+  const scssPath = scssPathFor(project.type);
+  if (!scssPath || !fs.existsSync(scssPath)) return;
+  const cssPath = scssPath.replace(/\.scss$/, ".css");
   try {
-    const result = sass.compile(SCSS_PATH, { style: "expanded", sourceMap: true });
-    fs.writeFileSync(CSS_PATH, result.css, "utf8");
-    console.log("[scss] compiled style.scss → style.css");
+    const result = sass.compile(scssPath, { style: "expanded", sourceMap: true });
+    fs.writeFileSync(cssPath, result.css, "utf8");
+    console.log(`[scss] compiled ${path.basename(scssPath)} → ${path.basename(cssPath)}`);
   } catch (err) {
     console.error("[scss] error:", err.message);
   }
@@ -38,6 +97,11 @@ const trackedFiles = new Map(); // urlPath → bytes
 
 function trackFile(urlPath, filePath) {
   try {
+    // Only the creative bundle counts toward WEIGHT. Anything served from
+    // outside the working dir is dev scaffolding — for ctv that's the mock spot
+    // video, which on air is streamed by the player, not shipped in the ad.
+    const workDir = activeWorkDir();
+    if (workDir && !filePath.startsWith(workDir)) return;
     const bytes = fs.statSync(filePath).size;
     trackedFiles.set(urlPath, bytes);
   } catch {}
@@ -56,6 +120,9 @@ const IGNORE_MISSING = [
   "/robots.txt",
 ];
 function recordMissing(urlPath) {
+  // Source maps are fetched only when DevTools is open. The RTBH SDK dev build
+  // carries a sourceMappingURL comment but ships no .map — not an asset bug.
+  if (urlPath.endsWith(".map")) return;
   if (IGNORE_MISSING.some(function (p) { return urlPath === p || urlPath.indexOf(p) === 0; })) return;
   missing404.set(urlPath, (missing404.get(urlPath) || 0) + 1);
 }
@@ -63,14 +130,7 @@ function recordMissing(urlPath) {
 function getBannerSizeStats() {
   let bytes = 0;
   for (const b of trackedFiles.values()) bytes += b;
-  // estimate gzip: text files compress ~70%, binary (images) ~5%
-  let gzipBytes = 0;
-  for (const [p, b] of trackedFiles) {
-    const ext = path.extname(p).toLowerCase();
-    const isText = [".html",".css",".js",".svg"].includes(ext);
-    gzipBytes += isText ? Math.round(b * 0.3) : Math.round(b * 0.97);
-  }
-  return { bytes, gzipBytes };
+  return { bytes };
 }
 
 // ── Live reload (SSE) ─────────────────────────────────────────────────────────
@@ -87,8 +147,9 @@ let scssDebounce;
 
 function startWatcher() {
   if (watcher) { try { watcher.close(); } catch {} watcher = null; }
-  if (!fs.existsSync(WORK_DIR)) return;
-  watcher = fs.watch(WORK_DIR, { recursive: true }, (event, filename) => {
+  const workDir = activeWorkDir();
+  if (!workDir) return;
+  watcher = fs.watch(workDir, { recursive: true }, (event, filename) => {
     if (!filename) return;
     if (filename.endsWith(".scss")) {
       clearTimeout(scssDebounce);
@@ -101,10 +162,11 @@ function startWatcher() {
 
 // ── Sync helpers ──────────────────────────────────────────────────────────────
 function syncSizesToJs(settings) {
+  const workDir = activeWorkDir();
   const sizes = (settings.FLUID_CREATIVE_SIZES || []).flatMap(e => e.sizes || []);
-  if (!sizes.length || !fs.existsSync(WORK_DIR)) return;
+  if (!sizes.length || !workDir) return;
   const pairs = sizes.map(s => { const [w, h] = s.split("x"); return `  [${w}, ${h}]`; }).join(",\n");
-  const animPath = path.join(WORK_DIR, "js/banner.js");
+  const animPath = path.join(workDir, "js/banner.js");
   if (!fs.existsSync(animPath)) return;
   const updated = fs.readFileSync(animPath, "utf8")
     .replace(/var KNOWN_SIZES = \[[\s\S]*?\];/, `var KNOWN_SIZES = [\n${pairs},\n];`);
@@ -113,13 +175,41 @@ function syncSizesToJs(settings) {
 }
 
 function syncSizesToScss(settings) {
+  const workDir = activeWorkDir();
   const sizes = (settings.FLUID_CREATIVE_SIZES || []).flatMap(e => e.sizes || []);
-  if (!sizes.length || !fs.existsSync(SCSS_PATH)) return;
+  if (!sizes.length || !workDir) return;
+  const scssPath = path.join(workDir, "css/style.scss");
+  if (!fs.existsSync(scssPath)) return;
   const sizeList = sizes.map(s => `  "${s}"`).join(",\n");
-  const updated = fs.readFileSync(SCSS_PATH, "utf8")
+  const updated = fs.readFileSync(scssPath, "utf8")
     .replace(/\$sizes:\s*\([^)]*\);/s, `$sizes: (\n${sizeList}\n);`);
-  fs.writeFileSync(SCSS_PATH, updated, "utf8");
+  fs.writeFileSync(scssPath, updated, "utf8");
   console.log("[synced] $sizes in style.scss");
+}
+
+// The panel's DELAY field only reaches the mock player; the real SIMID/VPAID
+// player reads autoMinimizeDelayMs from the creative's own transport.js. Write
+// it through on save so the two can't drift — same idea as the size sync above.
+function syncCtvDelayToTransport(devSettings) {
+  const project = detectProject();
+  if (!project || project.type !== "ctv") return;
+
+  const ms = parseInt(devSettings.CTV_MINIMIZE_DELAY_MS, 10);
+  if (!(ms > 0)) return;
+
+  const file = path.join(workDirFor(project.type), "js/sdk/transport.js");
+  if (!fs.existsSync(file)) return;
+
+  const src = fs.readFileSync(file, "utf8");
+  const updated = src.replace(/(autoMinimizeDelayMs:\s*)\d+/, `$1${ms}`);
+  if (updated === src) {
+    if (!/autoMinimizeDelayMs:\s*\d+/.test(src)) {
+      console.warn("[sync] autoMinimizeDelayMs not found in transport.js — on-air delay left as is");
+    }
+    return;
+  }
+  fs.writeFileSync(file, updated, "utf8");
+  console.log(`[synced] autoMinimizeDelayMs = ${ms} in transport.js`);
 }
 
 // ── Dir copy ──────────────────────────────────────────────────────────────────
@@ -213,11 +303,16 @@ function getRtbhMode() {
 
 function serveHtml(filePath, isPreview) {
   let html = fs.readFileSync(filePath, "utf8");
-  if (getRtbhMode() === "dev") {
+  const project = detectProject();
+  // CTV creatives carry no rtbh_enabler — nothing to strip or stub for them.
+  const useRtbhStub = typeCfg(project && project.type).rtbhEnabler;
+  if (useRtbhStub && getRtbhMode() === "dev") {
     html = html.replace(/<script\s[^>]*rtbh_enabler\.js[^>]*><\/script>\n?/g, "");
     html = html.replace("</head>", RTBH_POLYFILL_TAG + "\n</head>");
-    html = html.replace("</body>", DEV_OVERLAY_TAG + "\n</body>");
   }
+  // The design-comparison overlay is dev tooling of its own — every type gets
+  // it, in both RTBH modes and inside previews (ctv renders as a preview).
+  html = html.replace("</body>", DEV_OVERLAY_TAG + "\n</body>");
   if (!isPreview) {
     html = html.replace("</body>", DEV_PANEL_TAG + LIVE_RELOAD_SCRIPT + "\n</body>");
   } else {
@@ -242,6 +337,94 @@ function buildEmptyPage() {
 <body>
 ${DEV_PANEL_TAG}
 ${LIVE_RELOAD_SCRIPT}
+</body>
+</html>`;
+}
+
+// ── CTV mock player page ──────────────────────────────────────────────────────
+// A CTV creative never renders on its own: the SDK opens a SIMID/VPAID session
+// from <head> and js/sdk/transport.js only calls InteractiveHandler.init() once
+// the player sends Player:init. With no player, .body-inner stays hidden.
+//
+// This page is that player. It hosts the creative in an iframe at a real device
+// resolution (scaled to fit the window) and exposes window.__ctvStage; the dev
+// panel drives the creative through its public API — init / playVideo /
+// pauseVideo / handleInput / restoreOverlay. The creative itself is served
+// untouched (?preview → no panel injected inside the frame).
+function buildCtvPreview(folder) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTV Preview</title>
+  <style>
+    /* --bar must match the dev panel's bar height (#__dp.__bar in dev-panel.js). */
+    :root { --bar: 44px; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #0e1018; overflow: hidden; }
+    #__ctv-stage {
+      position: absolute; inset: var(--bar) 0 0 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    /* Largest 16:9 box that fits the stage. CTV creatives are laid out in % and
+       vmin, so aspect ratio is the only thing that has to be right — the frame
+       then scales with the window exactly like it does on the TV. */
+    #__ctv-frame {
+      width: min(100%, calc((100vh - var(--bar)) * 16 / 9));
+      aspect-ratio: 16 / 9;
+      border: 0; display: block; background: #000;
+      box-shadow: 0 0 0 1px #2b2f38, 0 20px 60px rgba(0,0,0,.6);
+    }
+    #__ctv-res {
+      position: fixed; left: 12px; bottom: 10px;
+      font: 10px/1 system-ui, sans-serif; color: #4a4f5c; letter-spacing: .06em;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="__ctv-stage">
+    <iframe id="__ctv-frame" src="/${folder}/?preview" allow="autoplay"></iframe>
+  </div>
+  <div id="__ctv-res"></div>
+
+  <script>
+  (function () {
+    var frame  = document.getElementById("__ctv-frame");
+    var resTag = document.getElementById("__ctv-res");
+    var loadHandlers = [];
+
+    // Read-out only — the size follows the window, there is nothing to pick.
+    function fit() {
+      var rect = frame.getBoundingClientRect();
+      resTag.textContent = Math.round(rect.width) + " × " + Math.round(rect.height);
+    }
+
+    window.addEventListener("resize", fit);
+
+    frame.addEventListener("load", function () {
+      loadHandlers.forEach(function (fn) {
+        try { fn(frame.contentWindow); } catch (e) {}
+      });
+    });
+
+    // Driven by the dev panel (utils/dev-panel.js).
+    window.__ctvStage = {
+      frame: function () { return frame; },
+      win: function () { try { return frame.contentWindow; } catch (e) { return null; } },
+      api: function () {
+        var w = this.win();
+        return w && w.InteractiveHandler ? w.InteractiveHandler : null;
+      },
+      reload: function () { frame.src = "/${folder}/?preview&t=" + Date.now(); },
+      onFrameLoad: function (fn) { loadHandlers.push(fn); },
+    };
+
+    fit();
+  })();
+  </script>
+${DEV_PANEL_TAG}
 </body>
 </html>`;
 }
@@ -414,10 +597,22 @@ const server = http.createServer((req, res) => {
 
   // GET /api/status
   if (req.method === "GET" && urlPath === "/api/status") {
-    const exists = fs.existsSync(WORK_DIR);
-    const project = exists ? (readDevSettings().CURRENT_PROJECT || null) : null;
+    const project = detectProject();
+    const cfg = project ? typeCfg(project.type) : null;
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ state: exists ? "working" : "empty", project }));
+    res.end(JSON.stringify({
+      state: project ? "working" : "empty",
+      project,
+      // The panel renders itself from this — no type list duplicated client-side.
+      types: Object.keys(TYPES),
+      config: cfg && {
+        folder: cfg.folder,
+        entry: cfg.entry,
+        sizes: cfg.sizes,
+        rtbhEnabler: cfg.rtbhEnabler,
+        weightLimitMb: cfg.weightLimitMb,
+      },
+    }));
     return;
   }
 
@@ -428,26 +623,31 @@ const server = http.createServer((req, res) => {
     req.on("end", () => {
       try {
         const { type } = JSON.parse(body);
-        if (fs.existsSync(WORK_DIR)) {
+        if (!TYPES[type]) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "unknown type" }));
+          return;
+        }
+        if (detectProject()) {
           res.writeHead(409, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "exists" }));
           return;
         }
-        const templateDir = path.join(TEMPLATES_DIR, type.toUpperCase(), "0x0_responsive");
+        const templateDir = templateDirFor(type);
         if (!fs.existsSync(templateDir)) {
           res.writeHead(404, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "template not found" }));
           return;
         }
-        copyDirSync(templateDir, WORK_DIR);
+        copyDirSync(templateDir, workDirFor(type));
         const devSettings = readDevSettings();
         devSettings.CURRENT_PROJECT = { type };
         writeDevSettings(devSettings);
         startWatcher();
         compileScss();
-        console.log(`[start] ${type}`);
+        console.log(`[start] ${type} → ${typeCfg(type).folder}/`);
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        res.end(JSON.stringify({ ok: true, entry: typeCfg(type).entry }));
       } catch (e) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.message }));
@@ -484,16 +684,19 @@ const server = http.createServer((req, res) => {
           res.end(JSON.stringify({ error: "invalid filename" }));
           return;
         }
-        if (!fs.existsSync(WORK_DIR)) {
+        const workDir = activeWorkDir();
+        if (!workDir) {
           res.writeHead(409, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "no active project" }));
           return;
         }
-        const imagesDir = path.join(WORK_DIR, "images");
+        // CTV creatives keep assets in img/, the web templates in images/.
+        const assetsDirName = fs.existsSync(path.join(workDir, "img")) ? "img" : "images";
+        const imagesDir = path.join(workDir, assetsDirName);
         fs.mkdirSync(imagesDir, { recursive: true });
         const dest = path.join(imagesDir, name);
         fs.writeFileSync(dest, Buffer.from(data, "base64"));
-        console.log(`[upload] images/${name}`);
+        console.log(`[upload] ${assetsDirName}/${name}`);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));
       } catch (e) {
@@ -507,12 +710,13 @@ const server = http.createServer((req, res) => {
   // POST /api/clear
   if (req.method === "POST" && urlPath === "/api/clear") {
     try {
-      if (fs.existsSync(WORK_DIR)) fs.rmSync(WORK_DIR, { recursive: true, force: true });
+      const workDir = activeWorkDir();
+      if (workDir) fs.rmSync(workDir, { recursive: true, force: true });
       const devSettings = readDevSettings();
       delete devSettings.CURRENT_PROJECT;
       writeDevSettings(devSettings);
       if (watcher) { try { watcher.close(); } catch {} watcher = null; }
-      console.log("[clear] working directory removed");
+      console.log(`[clear] ${workDir ? path.basename(workDir) + "/ removed" : "nothing to remove"}`);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
     } catch (e) {
@@ -535,8 +739,9 @@ const server = http.createServer((req, res) => {
     req.on("data", chunk => body += chunk);
     req.on("end", () => {
       try {
-        JSON.parse(body);
+        const parsed = JSON.parse(body);
         fs.writeFileSync(DEV_SETTINGS_PATH, body, "utf8");
+        syncCtvDelayToTransport(parsed);
         res.writeHead(200, { "Content-Type": MIME[".json"] });
         res.end('{"ok":true}');
         console.log("[saved] dev-settings.json");
@@ -583,14 +788,28 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Root → empty state page or redirect to working dir
+  // GET /ctv-preview — mock CTV player hosting the creative (ctv type only)
+  if (req.method === "GET" && urlPath === "/ctv-preview") {
+    const project = detectProject();
+    if (!project || project.type !== "ctv") {
+      res.writeHead(302, { Location: "/" });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": MIME[".html"] });
+    res.end(buildCtvPreview(typeCfg("ctv").folder));
+    return;
+  }
+
+  // Root → empty state page or redirect to the active type's entry point
   if (urlPath === "/") {
-    if (!fs.existsSync(WORK_DIR)) {
+    const project = detectProject();
+    if (!project) {
       res.writeHead(200, { "Content-Type": MIME[".html"] });
       res.end(buildEmptyPage());
       return;
     }
-    res.writeHead(301, { Location: "/0x0_responsive/" });
+    res.writeHead(302, { Location: typeCfg(project.type).entry });
     res.end();
     return;
   }
@@ -608,10 +827,19 @@ const server = http.createServer((req, res) => {
     const indexPath = path.join(filePath, "index.html");
     if (!fs.existsSync(indexPath)) { if (req.method === "GET") recordMissing(urlPath); res.writeHead(404); res.end("Not found"); return; }
     if (!urlPath.endsWith("/")) { res.writeHead(301, { Location: urlPath + "/" }); res.end(); return; }
+    const isPreview = urlObj.searchParams.has("preview");
+    // A CTV creative opened on its own shows nothing — it stays hidden until a
+    // player calls init(). Send it to the mock player instead.
+    const project = detectProject();
+    if (!isPreview && project && project.type === "ctv" &&
+        urlPath.replace(/\//g, "") === typeCfg("ctv").folder) {
+      res.writeHead(302, { Location: "/ctv-preview" });
+      res.end();
+      return;
+    }
     trackedFiles.clear();
     missing404.clear();
     trackFile(urlPath, indexPath);
-    const isPreview = urlObj.searchParams.has("preview");
     res.writeHead(200, { "Content-Type": MIME[".html"] });
     res.end(serveHtml(indexPath, isPreview));
     return;
@@ -635,8 +863,10 @@ server.listen(PORT, "127.0.0.1", () => {
   startWatcher();
   compileScss();
   const url = `http://localhost:${PORT}/`;
-  console.log(`\n  Banner Dev   http://localhost:${PORT}/`);
-  console.log(`  Scroll Prev  http://localhost:${PORT}/scroll-preview\n`);
+  const project = detectProject();
+  console.log(`\n  Banner Dev   http://localhost:${PORT}/${project ? "   (" + project.type + " → " + typeCfg(project.type).folder + "/)" : ""}`);
+  console.log(`  Scroll Prev  http://localhost:${PORT}/scroll-preview`);
+  console.log(`  CTV Player   http://localhost:${PORT}/ctv-preview\n`);
   exec(`open "${url}"`);
 });
 

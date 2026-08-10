@@ -5,18 +5,25 @@
   var START_URL        = "/api/start";
   var CLEAR_URL        = "/api/clear";
 
-  var BANNER_TYPES = [
-    { label: "custom"        },
-    { label: "scroll_banner" },
-    { label: "commerce_ads"  },
-    { label: "interstitial"  },
-  ];
+  // Types come from the server's TYPES registry (/api/status) so the dropdown
+  // can never drift from what utils/templates/ actually holds. The list below is
+  // only a fallback for when the status call fails.
+  var BANNER_TYPES = ["custom", "scroll_banner", "commerce_ads", "interstitial", "ctv"];
 
   var RTBH_MODE = "dev";
   var BANNER_TYPE = "";
+  var TYPE_CONFIG = {};      // server-side config of the active type
+  var WEIGHT_LIMIT_MB = 2;
   var sizes = [];
   var interstitialSizes = [];
   var sizeSelect, addInput;
+
+  // ── CTV preview defaults ────────────────────────────────
+  // The mock player is always 16:9 (every CTV placement is) and follows the
+  // window size — the creative is laid out in % / vmin, so there is no
+  // resolution to choose.
+  var CTV_DEFAULT_VIDEO = "/video.mp4";
+  var CTV_DEFAULT_DELAY = 500;
 
   // ── Lock banner size detection to the dev-panel selection ──────────────
   // banner.js's updateDim() derives the <body> size class from the browser
@@ -67,6 +74,25 @@
       box-shadow: 0 4px 16px rgba(0,0,0,.4);
       min-width: 190px;
     }
+    /* Bar layout — used by the CTV mock player, where the creative fills the
+       whole window and a top-right box would sit on top of the artwork. */
+    #__dp.__bar {
+      top: 0; left: 0; right: 0;
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+      height: 44px;
+      padding: 0 12px;
+      border-radius: 0;
+      border-width: 0 0 1px 0;
+      background: rgba(18, 20, 28, 0.96);
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    #__dp.__bar .__hsep { width: 1px; height: 18px; margin: 0; flex-shrink: 0; }
+    #__dp.__bar .__action-btn { width: auto; padding: 4px 14px; }
+    #__dp.__bar .__input-name { width: 220px; flex: 0 0 auto; }
     #__dp .__row { display: flex; align-items: center; gap: 6px; }
     #__dp .__label { color: #444; font-size: 10px; letter-spacing: .04em; flex-shrink: 0; }
     #__dp .__sep { width: 1px; height: 16px; background: #2a2d3a; flex-shrink: 0; }
@@ -279,8 +305,11 @@
     var weightEl = document.getElementById("__weight-toast");
     var errEl = document.getElementById("__err-toast");
     if (!panelEl) return;
-    var w = panelEl.getBoundingClientRect().width;
-    var top = panelEl.getBoundingClientRect().bottom + 6;
+    var rect = panelEl.getBoundingClientRect();
+    // In bar mode the panel spans the window — toasts keep their own width and
+    // stay tucked under the bar's right edge.
+    var w = panelEl.classList.contains("__bar") ? 220 : rect.width;
+    var top = rect.bottom + 6;
     if (weightEl) {
       weightEl.style.top = top + "px";
       weightEl.style.width = w + "px";
@@ -316,6 +345,61 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         (data.items || []).forEach(function (it) { report404(it.url); });
+      })
+      .catch(function () {});
+  }
+
+  // ── Weight toast ──────────────────────────────────────
+  // Reads the byte totals the server tracked for the last HTML load. Shared by
+  // every type — for ctv the tracked load is the creative inside the iframe.
+  function showWeightToast() {
+    fetch("/api/banner-size", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var LIMIT_MB = WEIGHT_LIMIT_MB;
+        var bytes    = data.bytes || 0;
+        var mbRaw = bytes / (1024 * 1024);
+        var warn  = mbRaw > LIMIT_MB;
+        var ratio = Math.min(mbRaw / LIMIT_MB, 1.5);
+        function fmt(mb) {
+          return mb >= 1 ? mb.toFixed(2) + " MB" : (mb * 1024).toFixed(0) + " kB";
+        }
+        var existing = document.getElementById("__weight-toast");
+        if (existing) existing.remove();
+        var toast = document.createElement("div");
+        toast.id = "__weight-toast";
+        if (warn) toast.classList.add("__warn");
+        toast.innerHTML =
+          '<div class="__wt-row">' +
+            '<span class="__wt-lbl">WEIGHT</span>' +
+            (warn ? '<span class="__wt-val __warn">⚠ exceeded</span>' : '') +
+          '</div>' +
+          '<div class="__wt-sep"></div>' +
+          '<div class="__wt-row">' +
+            '<span class="__wt-lbl">resources</span>' +
+            '<span class="__wt-num' + (warn ? " __warn" : "") + '">' + fmt(mbRaw) + ' / ' + LIMIT_MB + ' MB</span>' +
+          '</div>' +
+          '<div class="__wt-sep"></div>' +
+          '<div class="__wt-bar-bg">' +
+            '<div class="__wt-bar-fill' + (warn ? " __warn" : "") + '" style="width:' + Math.min(ratio * 100, 100) + '%"></div>' +
+          '</div>';
+        document.body.appendChild(toast);
+        positionToasts();
+      })
+      .catch(function () {});
+  }
+
+  // Merge a patch into dev-settings.json without clobbering other keys.
+  function saveDev(patch) {
+    return fetch(DEV_SETTINGS_URL, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (ds) {
+        Object.keys(patch).forEach(function (k) { ds[k] = patch[k]; });
+        return fetch(DEV_SETTINGS_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ds, null, 2),
+        });
       })
       .catch(function () {});
   }
@@ -467,11 +551,11 @@
     var typeSelect = document.createElement("select");
     BANNER_TYPES.forEach(function (t) {
       var opt = document.createElement("option");
-      opt.value = t.label; opt.textContent = t.label;
+      opt.value = t; opt.textContent = t;
       typeSelect.appendChild(opt);
     });
     var savedType = localStorage.getItem("__dp_type");
-    if (savedType && BANNER_TYPES.find(function (t) { return t.label === savedType; })) {
+    if (savedType && BANNER_TYPES.indexOf(savedType) !== -1) {
       typeSelect.value = savedType;
     }
     typeRow.appendChild(typeSelect);
@@ -500,7 +584,8 @@
       })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          if (data.ok) { location.href = "/0x0_responsive/"; }
+          // The entry point is type-specific — ctv opens the mock player.
+          if (data.ok) { location.href = data.entry || "/0x0_responsive/"; }
           else { startBtn.textContent = data.error || "error"; startBtn.disabled = false; }
         })
         .catch(function () { startBtn.textContent = "error"; startBtn.disabled = false; });
@@ -516,6 +601,10 @@
 
     var type = project ? project.type : "—";
     BANNER_TYPE = type;
+
+    // CTV has no fixed sizes and no rtbh_enabler, and it renders inside the mock
+    // player rather than as the page itself — it gets its own set of controls.
+    if (type === "ctv") { buildCtvPanel(); return; }
 
     // status
     var statusRow = mkRow();
@@ -557,48 +646,6 @@
       btnProd.className = "__mode-btn" + (RTBH_MODE === "prod" ? " __active-prod" : "");
     }
     applyModeStyle();
-    function showWeightToast() {
-      var LIMIT_MB = BANNER_TYPE === "interstitial" ? 3 : 2;
-      fetch("/api/banner-size", { cache: "no-store" })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          var bytes     = data.bytes     || 0;
-          var gzipBytes = data.gzipBytes || 0;
-          var mbRaw  = bytes     / (1024 * 1024);
-          var mbGzip = gzipBytes / (1024 * 1024);
-          var warn   = mbRaw > LIMIT_MB;
-          var ratio  = Math.min(mbRaw / LIMIT_MB, 1.5);
-          function fmt(mb) {
-            return mb >= 1 ? mb.toFixed(2) + " MB" : (mb * 1024).toFixed(0) + " kB";
-          }
-          var existing = document.getElementById("__weight-toast");
-          if (existing) existing.remove();
-          var toast = document.createElement("div");
-          toast.id = "__weight-toast";
-          if (warn) toast.classList.add("__warn");
-          toast.innerHTML =
-            '<div class="__wt-row">' +
-              '<span class="__wt-lbl">WEIGHT</span>' +
-              (warn ? '<span class="__wt-val __warn">⚠ exceeded</span>' : '') +
-            '</div>' +
-            '<div class="__wt-sep"></div>' +
-            '<div class="__wt-row">' +
-              '<span class="__wt-lbl">transferred</span>' +
-              '<span class="__wt-num' + (warn ? " __warn" : "") + '">' + fmt(mbGzip) + '</span>' +
-            '</div>' +
-            '<div class="__wt-row">' +
-              '<span class="__wt-lbl">resources</span>' +
-              '<span class="__wt-num">' + fmt(mbRaw) + ' / ' + LIMIT_MB + ' MB</span>' +
-            '</div>' +
-            '<div class="__wt-sep"></div>' +
-            '<div class="__wt-bar-bg">' +
-              '<div class="__wt-bar-fill' + (warn ? " __warn" : "") + '" style="width:' + Math.min(ratio * 100, 100) + '%"></div>' +
-            '</div>';
-          document.body.appendChild(toast);
-          positionToasts();
-        })
-        .catch(function () {});
-    }
 
     function setMode(m) {
       RTBH_MODE = m;
@@ -825,10 +872,325 @@
     document.dispatchEvent(new CustomEvent("devpanel:ready"));
   }
 
+  // ── CTV state ─────────────────────────────────────────
+  // Everything the mock player needs to stand in for a real SIMID/VPAID host.
+  var ctv = {
+    video: CTV_DEFAULT_VIDEO,
+    delay: CTV_DEFAULT_DELAY,
+    state: "video", // 'video' = overlay fullscreen, 'banner' = minimized + banner
+    overlay: false, // design mockup shown over the creative
+  };
+
+  // Set by the panel so the STATE toggle can follow the creative's own
+  // auto-minimize timer instead of drifting out of sync with it.
+  var ctvOnStateChange = null;
+
+  function ctvSetState(state) {
+    ctv.state = state;
+    if (ctvOnStateChange) ctvOnStateChange();
+  }
+
+  function ctvStage() {
+    return window.__ctvStage || null;
+  }
+
+  // What js/sdk/transport.js would build from the ad payload. Keys must stay in
+  // sync with the model InteractiveHandler.init() documents.
+  function ctvModel() {
+    return {
+      overlayVideoUrl: ctv.video || null,
+      autoMinimizeDelayMs: ctv.delay,
+      qrCode: { enabled: false, clickable: false, svgMarkup: null },
+    };
+  }
+
+  function ctvActions() {
+    return {
+      onQrClick: function () { captureEntry("warn", "onQrClick() — click-through fired"); },
+      requestMuteMainVideo: function () {},
+      requestUnmuteMainVideo: function () {},
+    };
+  }
+
+  // minimize() lives on the creative's private LayoutController — only
+  // restoreOverlay() is public. Reproduce what index.js does on its
+  // auto-minimize timer so the STATE toggle can go both ways.
+  function ctvMinimize(win) {
+    if (!win) return;
+    var doc = win.document;
+    var content = doc.querySelector(".video-content");
+    var overlay = doc.getElementById("videoOverlay");
+    var banner  = doc.querySelector(".banner__wrapper");
+    if (content) content.classList.add("is_minimize");
+    if (overlay) overlay.classList.add("is_minimize");
+    if (banner)  banner.classList.remove("hidden");
+  }
+
+  // Console output and runtime errors from inside the iframe would otherwise
+  // never reach the panel's Console toast, which lives on the host page.
+  function ctvHookConsole(win) {
+    if (!win || win.__dpHooked) return;
+    win.__dpHooked = true;
+    var origError = win.console.error.bind(win.console);
+    var origWarn  = win.console.warn.bind(win.console);
+    win.console.error = function () {
+      origError.apply(null, arguments);
+      captureEntry("error", Array.prototype.join.call(arguments, " "));
+    };
+    win.console.warn = function () {
+      origWarn.apply(null, arguments);
+      captureEntry("warn", Array.prototype.join.call(arguments, " "));
+    };
+    win.addEventListener("error", function (e) {
+      var t = e.target;
+      if (t && (t.tagName === "IMG" || t.tagName === "SCRIPT" || t.tagName === "LINK" || t.tagName === "SOURCE")) {
+        var src = t.src || t.href || "?";
+        report404(String(src).replace(location.origin, ""));
+      } else {
+        captureEntry("error", (e.message || "Unknown error") +
+          (e.filename ? "\n" + e.filename.split("/").pop() + ":" + e.lineno : ""));
+      }
+    }, true);
+    win.addEventListener("keydown", ctvForwardKey);
+  }
+
+  // WASD is the primary remote layout; arrows stay as an alias so muscle memory
+  // from the old panel keeps working.
+  var CTV_KEY_MAP = {
+    a: "left", d: "right", w: "up", s: "down", enter: "ok",
+    arrowleft: "left", arrowright: "right", arrowup: "up", arrowdown: "down",
+  };
+
+  var CTV_CODE_MAP = {
+    KeyA: "left", KeyD: "right", KeyW: "up", KeyS: "down", Enter: "ok",
+    ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down",
+  };
+
+  // `=` toggles the design overlay inside the creative, matching the other
+  // types. dev-overlay.js exposes the toggle on the creative's window.
+  function ctvToggleOverlay(force) {
+    var stage = ctvStage();
+    var win = stage && stage.win();
+    if (!win || typeof win.__devOverlayToggle !== "function") return;
+    ctv.overlay = win.__devOverlayToggle(force);
+  }
+
+  function ctvForwardKey(e) {
+    // Don't steal keys while typing in the panel's own inputs.
+    var tag = e.target && e.target.tagName;
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+
+    if (e.key === "=") {
+      e.preventDefault();
+      ctvToggleOverlay();
+      return;
+    }
+
+    // e.code first so WASD keeps working on non-latin keyboard layouts.
+    var mapped = CTV_CODE_MAP[e.code] || CTV_KEY_MAP[String(e.key).toLowerCase()];
+    if (!mapped) return;
+    e.preventDefault();
+    var stage = ctvStage();
+    var api = stage && stage.api();
+    if (api) api.handleInput({ key: e.key, mapped: mapped });
+  }
+
+  // Runs on every iframe load — this is the moment a real player would send
+  // Player:init followed by Player:startCreative.
+  function ctvBoot(win) {
+    ctvHookConsole(win);
+    var api = win && win.InteractiveHandler;
+    if (!api) {
+      captureEntry("error", "InteractiveHandler not found — is js/creative/index.js loaded?");
+      return;
+    }
+    // A creative whose init() throws (missing node, bad selector) must not take
+    // the panel down with it — surface the error and keep the tooling alive.
+    try {
+      api.init(ctvModel(), ctvActions());
+      api.playVideo();
+    } catch (e) {
+      captureEntry("error", "creative init() threw: " + ((e && e.message) || e));
+    }
+    // Survives Replay and live reloads — the mockup stays up while you iterate.
+    if (ctv.overlay) ctvToggleOverlay(true);
+
+    if (ctv.state === "banner") {
+      ctvMinimize(win);
+    } else {
+      // init() arms the creative's own auto-minimize timer — follow it so the
+      // STATE toggle shows what is actually on screen.
+      setTimeout(function () {
+        if (ctv.state === "video") ctvSetState("banner");
+      }, ctv.delay + 50);
+    }
+    // Assets keep arriving after load — give them a moment before weighing.
+    setTimeout(showWeightToast, 600);
+    pollMissing();
+    setTimeout(pollMissing, 1200);
+  }
+
+  // ── CTV panel ─────────────────────────────────────────
+  function buildCtvPanel() {
+    panel.innerHTML = "";
+    panel.classList.add("__bar");
+
+    fetch(DEV_SETTINGS_URL, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (ds) {
+        if (typeof ds.CTV_VIDEO_URL === "string") ctv.video = ds.CTV_VIDEO_URL;
+        if (ds.CTV_MINIMIZE_DELAY_MS > 0) ctv.delay = parseInt(ds.CTV_MINIMIZE_DELAY_MS, 10);
+      })
+      .catch(function () {})
+      .then(render);
+
+    function render() {
+      var stage = ctvStage();
+
+      // status
+      var statusRow = mkRow();
+      var dot = document.createElement("span"); dot.className = "__status-dot __on";
+      var txt = document.createElement("span"); txt.className = "__status-text __on";
+      txt.textContent = "ctv";
+      statusRow.appendChild(dot); statusRow.appendChild(txt);
+      panel.appendChild(statusRow);
+
+      if (!stage) {
+        // The panel was injected somewhere other than /ctv-preview.
+        panel.appendChild(mkHsep());
+        var linkRow = mkRow();
+        var link = document.createElement("a");
+        link.className = "__preview-btn";
+        link.href = "/ctv-preview";
+        link.textContent = "↗ Open mock player";
+        linkRow.appendChild(link);
+        panel.appendChild(linkRow);
+        return;
+      }
+
+      panel.appendChild(mkHsep());
+
+      // state toggle: fullscreen video ↔ minimized + banner
+      var stateRow = mkRow();
+      stateRow.appendChild(mkLabel("STATE"));
+      var stateToggle = document.createElement("div"); stateToggle.className = "__mode-toggle";
+      var btnVideo  = document.createElement("span"); btnVideo.textContent  = "VIDEO";
+      var btnBanner = document.createElement("span"); btnBanner.textContent = "BANNER";
+      function applyStateStyle() {
+        btnVideo.className  = "__mode-btn" + (ctv.state === "video"  ? " __active-dev" : "");
+        btnBanner.className = "__mode-btn" + (ctv.state === "banner" ? " __active-dev" : "");
+      }
+      btnVideo.onclick = function () {
+        ctvSetState("video");
+        var api = stage.api();
+        if (api) api.restoreOverlay();
+      };
+      btnBanner.onclick = function () {
+        ctvSetState("banner");
+        ctvMinimize(stage.win());
+      };
+      ctvOnStateChange = applyStateStyle;
+      applyStateStyle();
+      stateToggle.appendChild(btnVideo); stateToggle.appendChild(btnBanner);
+      stateRow.appendChild(stateToggle);
+      panel.appendChild(stateRow);
+      panel.appendChild(mkHsep());
+
+      // spot video + auto-minimize delay
+      var videoRow = mkRow();
+      videoRow.appendChild(mkLabel("SPOT"));
+      var videoInput = document.createElement("input");
+      videoInput.className = "__input-name";
+      videoInput.placeholder = "/video.mp4";
+      videoInput.value = ctv.video;
+      videoInput.onchange = function () {
+        ctv.video = videoInput.value.trim();
+        saveDev({ CTV_VIDEO_URL: ctv.video }).then(replay);
+      };
+      videoRow.appendChild(videoInput);
+      panel.appendChild(videoRow);
+
+      var delayRow = mkRow();
+      delayRow.appendChild(mkLabel("DELAY"));
+      var delayInput = document.createElement("input");
+      delayInput.className = "__input-sm";
+      delayInput.placeholder = "ms";
+      delayInput.value = ctv.delay;
+      delayInput.onchange = function () {
+        var ms = parseInt(delayInput.value, 10);
+        ctv.delay = ms > 0 ? ms : CTV_DEFAULT_DELAY;
+        delayInput.value = ctv.delay;
+        saveDev({ CTV_MINIMIZE_DELAY_MS: ctv.delay }).then(replay);
+      };
+      delayRow.appendChild(delayInput);
+      var replayBtn = document.createElement("button");
+      replayBtn.className = "__preview-btn";
+      replayBtn.textContent = "⟳ Replay";
+      replayBtn.title = "Reload the creative and re-run the intro animation";
+      replayBtn.onclick = replay;
+      delayRow.appendChild(replayBtn);
+      panel.appendChild(delayRow);
+      panel.appendChild(mkHsep());
+
+      // design overlay — same `=` toggle as the other types, but the creative
+      // sits in an iframe here, so drive it from the host page too.
+      var overlayRow = mkRow();
+      overlayRow.appendChild(mkLabel("OVERLAY"));
+      var overlayBtn = document.createElement("button");
+      overlayBtn.className = "__preview-btn";
+      overlayBtn.textContent = "= toggle";
+      overlayBtn.title = "Show the mockup from .overlay over the creative";
+      overlayBtn.onclick = function () { ctvToggleOverlay(); };
+      overlayRow.appendChild(overlayBtn);
+      panel.appendChild(overlayRow);
+      panel.appendChild(mkHsep());
+
+      // remote hint
+      var hintRow = mkRow();
+      var hint = document.createElement("span");
+      hint.className = "__label";
+      hint.textContent = "REMOTE  W A S D  ENTER";
+      hintRow.appendChild(hint);
+      panel.appendChild(hintRow);
+      panel.appendChild(mkHsep());
+
+      // clear
+      var clearRow = mkRow();
+      var clearBtn = document.createElement("button");
+      clearBtn.className = "__action-btn __clear";
+      clearBtn.textContent = "CLEAR";
+      clearBtn.onclick = function () {
+        if (!confirm("Clear working directory?")) return;
+        fetch(CLEAR_URL, { method: "POST" })
+          .then(function () { location.href = "/"; })
+          .catch(function () { location.href = "/"; });
+      };
+      clearRow.appendChild(clearBtn);
+      panel.appendChild(clearRow);
+
+      function replay() {
+        ctvSetState("video");
+        stage.reload();
+      }
+
+
+      stage.onFrameLoad(ctvBoot);
+      // The iframe may already have loaded before the panel finished booting.
+      if (stage.win() && stage.win().InteractiveHandler) ctvBoot(stage.win());
+      window.addEventListener("keydown", ctvForwardKey);
+      setInterval(pollMissing, 3000);
+
+      document.dispatchEvent(new CustomEvent("devpanel:ready"));
+    }
+  }
+
   // ── Init ──────────────────────────────────────────────
   fetch(STATUS_URL, { cache: "no-store" })
     .then(function (r) { return r.json(); })
     .then(function (status) {
+      if (status.types && status.types.length) BANNER_TYPES = status.types;
+      TYPE_CONFIG = status.config || {};
+      if (TYPE_CONFIG.weightLimitMb > 0) WEIGHT_LIMIT_MB = TYPE_CONFIG.weightLimitMb;
       if (status.state === "working") {
         Promise.all([
           fetch(SETTINGS_URL,     { cache: "no-store" }).then(function (r) { return r.json(); }),

@@ -10,16 +10,18 @@
   }
 }
 
+// 720x1280 → 9/16
 .vert .banner__wrapper {
-  aspect-ratio: 3/4;
+  aspect-ratio: 9/16;
   width: min(100vw, 56.25vh);
   height: min(100vh, 177.78vw);
 }
 
+// 1280x720 → 16/9
 .land .banner__wrapper {
-  aspect-ratio: 4/3;
-  width: min(100vw, 133.33vh);
-  height: min(100vh, 75vw);
+  aspect-ratio: 16/9;
+  width: min(100vw, 177.78vh);
+  height: min(100vh, 56.25vw);
 }
 
 // ── Layout: vert ──────────────────────────────────────────────────────────────
