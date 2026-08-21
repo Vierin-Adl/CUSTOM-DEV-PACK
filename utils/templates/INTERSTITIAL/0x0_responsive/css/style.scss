@@ -1,14 +1,4 @@
 // ── Banner wrapper ────────────────────────────────────────────────────────────
-.banner__wrapper {
-  position: relative;
-  overflow: hidden;
-
-  * {
-    position: absolute;
-    background-repeat: no-repeat;
-    background-size: contain;
-  }
-}
 
 // 720x1280 → 9/16
 .vert .banner__wrapper {
@@ -23,6 +13,14 @@
   width: min(100vw, 177.78vh);
   height: min(100vh, 56.25vw);
 }
+
+// background + crops/side elements
+.bg {
+  background-size: cover;
+  background-position: center;
+}
+
+// elements inside .banner__wrap
 
 // ── Layout: vert ──────────────────────────────────────────────────────────────
 .vert {

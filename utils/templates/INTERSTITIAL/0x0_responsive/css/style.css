@@ -1,73 +1,3 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-body,
-h1,
-h2,
-h3,
-h4,
-p,
-ul[class],
-ol[class],
-li,
-figure,
-figcaption,
-blockquote,
-dl,
-dd {
-  margin: 0;
-}
-
-ul[class],
-ol[class] {
-  padding: 0;
-  list-style: none;
-}
-
-input,
-button,
-textarea,
-select {
-  font: inherit;
-}
-
-a {
-  text-decoration: none;
-  color: inherit;
-}
-
-html,
-body {
-  height: 100%;
-  overflow: hidden;
-}
-
-body {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.banner_click_area {
-  position: fixed;
-  inset: 0;
-  cursor: pointer;
-  z-index: 9999;
-}
-
-.banner__wrapper {
-  position: relative;
-  overflow: hidden;
-}
-.banner__wrapper * {
-  position: absolute;
-  background-repeat: no-repeat;
-  background-size: contain;
-}
-
 .vert .banner__wrapper {
   aspect-ratio: 9/16;
   width: min(100vw, 56.25vh);
@@ -78,4 +8,9 @@ body {
   aspect-ratio: 16/9;
   width: min(100vw, 177.78vh);
   height: min(100vh, 56.25vw);
+}
+
+.bg {
+  background-size: cover;
+  background-position: center;
 }

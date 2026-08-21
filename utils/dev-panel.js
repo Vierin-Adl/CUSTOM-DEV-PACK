@@ -43,7 +43,15 @@
   (function lockUpdateDim() {
     var saved = localStorage.getItem("__dp_size");
     if (saved && /^\d+x\d+$/.test(saved) && typeof updateDim === "function") {
-      window.updateDim = function () { sizeClassTarget().className = "b" + saved; };
+      // the orientation class now lives on the same element, so derive it from
+      // the locked size instead of wiping it — setSize() runs after
+      // DOMContentLoaded, and extraInit() must already see the right class
+      var savedParts = saved.split("x");
+      var savedOrient =
+        parseInt(savedParts[0]) > parseInt(savedParts[1]) ? " land" : " vert";
+      window.updateDim = function () {
+        sizeClassTarget().className = "b" + saved + savedOrient;
+      };
       _dimLocked = true;
       // banner.js registered its resize handler with the original updateDim
       // reference, so reassigning window.updateDim doesn't stop it from
@@ -439,8 +447,12 @@
     if (BANNER_TYPE === "interstitial") {
       document.body.style.width  = w + "px";
       document.body.style.height = h + "px";
+      // The orientation class goes on [data-area="banner"] — same target
+      // banner.js's updateDim() writes to, so the two can't disagree.
       document.body.classList.remove("land", "vert");
-      document.body.classList.add(w > h ? "land" : "vert");
+      var orientTarget = sizeClassTarget();
+      orientTarget.classList.remove("land", "vert");
+      orientTarget.classList.add(w > h ? "land" : "vert");
       var wrapper = document.querySelector(".banner__wrapper");
       if (wrapper) { wrapper.style.width = w + "px"; wrapper.style.height = h + "px"; }
       return;
@@ -476,7 +488,7 @@
     if (!/^\d+x\d+$/.test(val)) { addInput.style.borderColor = "#e05c5c"; return; }
     addInput.style.borderColor = "";
     var arr = activeArr();
-    var reloadAfter = BANNER_TYPE !== "interstitial";
+    var reloadAfter = true;
     if (arr.indexOf(val) !== -1) {
       sizeSelect.value = val;
       setSize(val);
@@ -602,6 +614,8 @@
     var type = project ? project.type : "—";
     BANNER_TYPE = type;
 
+    setupDropToOptimize();
+
     // CTV has no fixed sizes and no rtbh_enabler, and it renders inside the mock
     // player rather than as the page itself — it gets its own set of controls.
     if (type === "ctv") { buildCtvPanel(); return; }
@@ -700,10 +714,6 @@
 
     // wire size
     sizeSelect.onchange = function () {
-      if (type === "interstitial") {
-        setSize(sizeSelect.value);
-        return;
-      }
       // Persist the selection and reload: extraInit() runs only once on load,
       // so a fresh load (with updateDim() locked to the new size) is what
       // re-runs the size-specific animation branch correctly.
@@ -723,7 +733,7 @@
       // scroll_banner has no banner.js/updateDim(), so _dimLocked can never
       // flip true — reloading here would loop forever. Skip it (and any
       // template without updateDim, which has nothing to lock anyway).
-      if (type !== "interstitial" && type !== "scroll_banner" &&
+      if (type !== "scroll_banner" &&
           typeof updateDim === "function" && !_dimLocked) {
         location.reload();
         return;
@@ -732,13 +742,34 @@
       updateDim();
     }
 
-    // ── Drop-to-Optimize overlay ──────────────────────────
+
+    showWeightToast();
+
+    // Surface 404s the DOM error listener can't see (CSS background-image,
+    // @font-face, etc.). Assets load async, so poll a few times after load,
+    // then keep a slow heartbeat for late/lazy requests.
+    pollMissing();
+    setTimeout(pollMissing, 400);
+    setTimeout(pollMissing, 1500);
+    setInterval(pollMissing, 3000);
+
+    document.dispatchEvent(new CustomEvent("devpanel:ready"));
+  }
+
+  // ── Drop-to-Optimize overlay ──────────────────────────
+  var _dropReady = false;
+  function setupDropToOptimize() {
+    if (_dropReady) return;
+    _dropReady = true;
+
+    var assetsDir = BANNER_TYPE === "ctv" ? "img/" : "images/";
+
     var dropOverlay = document.createElement("div");
     dropOverlay.style.cssText = [
       "display:none;position:fixed;inset:0;z-index:2147483646",
       "background:rgba(10,12,20,.9);backdrop-filter:blur(6px)",
       "flex-direction:column;align-items:center;justify-content:center;gap:10px",
-      "font:13px/1 system-ui,sans-serif;pointer-events:none",
+      "font:13px/1 system-ui,sans-serif;pointer-events:auto",
     ].join(";");
 
     var dropTitle = document.createElement("div");
@@ -747,7 +778,7 @@
 
     var dropSub = document.createElement("div");
     dropSub.style.cssText = "font-size:13px;color:#5b8dee;letter-spacing:.03em;margin-top:2px";
-    dropSub.textContent = "saves to images/";
+    dropSub.textContent = "saves to " + assetsDir;
 
     var dropStatus = document.createElement("div");
     dropStatus.style.cssText = "font-size:12px;color:#4caf6e;min-height:16px;margin-top:4px";
@@ -834,7 +865,7 @@
         if (i >= files.length) {
           dropTitle.textContent = "Done!";
           dropTitle.style.color = "#4caf6e";
-          dropSub.textContent = files.length + " file(s) saved to images/";
+          dropSub.textContent = files.length + " file(s) saved to " + assetsDir;
           setTimeout(function() { dropOverlay.style.display = "none"; }, 2000);
           return;
         }
@@ -858,18 +889,6 @@
 
       next(0);
     });
-
-    showWeightToast();
-
-    // Surface 404s the DOM error listener can't see (CSS background-image,
-    // @font-face, etc.). Assets load async, so poll a few times after load,
-    // then keep a slow heartbeat for late/lazy requests.
-    pollMissing();
-    setTimeout(pollMissing, 400);
-    setTimeout(pollMissing, 1500);
-    setInterval(pollMissing, 3000);
-
-    document.dispatchEvent(new CustomEvent("devpanel:ready"));
   }
 
   // ── CTV state ─────────────────────────────────────────
