@@ -453,8 +453,10 @@
       var orientTarget = sizeClassTarget();
       orientTarget.classList.remove("land", "vert");
       orientTarget.classList.add(w > h ? "land" : "vert");
-      var wrapper = document.querySelector(".banner__wrapper");
-      if (wrapper) { wrapper.style.width = w + "px"; wrapper.style.height = h + "px"; }
+      // .banner__wrapper is left to the creative's own CSS: it keeps its aspect
+      // ratio inside the slot and centres itself, so forcing the slot's raw
+      // width and height on it here would only break that on any slot that is
+      // not exactly 9/16 (or 16/9)
       return;
     }
 
