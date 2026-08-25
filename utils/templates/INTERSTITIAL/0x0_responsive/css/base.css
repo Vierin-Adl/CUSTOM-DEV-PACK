@@ -4,12 +4,6 @@
   box-sizing: border-box;
 }
 
-* {
-  position: absolute;
-  background-repeat: no-repeat;
-  background-size: contain;
-}
-
 a {
   text-decoration: none;
   color: inherit;
@@ -33,26 +27,4 @@ body {
   inset: 0;
   cursor: pointer;
   z-index: 9999;
-}
-
-[data-area="banner"] {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-[data-area="banner"] * {
-  position: absolute;
-  background-repeat: no-repeat;
-  background-size: contain;
-}
-
-.banner__wrapper {
-  position: relative;
-}
-
-.banner {
-  overflow: hidden;
 }

@@ -4,10 +4,12 @@
     "768x1024",
     "1024x768",
     "720x1280",
-    "1280x720"
+    "1280x720",
+    "320x480",
+    "480x320"
   ],
   "CTV_MINIMIZE_DELAY_MS": 1000,
   "CURRENT_PROJECT": {
-    "type": "ctv"
+    "type": "interstitial"
   }
 }

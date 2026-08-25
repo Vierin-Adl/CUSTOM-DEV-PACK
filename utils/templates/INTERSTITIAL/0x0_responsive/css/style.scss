@@ -1,17 +1,49 @@
 // ── Banner wrapper ────────────────────────────────────────────────────────────
+body {
+  position: relative;
+  overflow: hidden;
+}
 
-// 720x1280 → 9/16
+[data-area="banner"] {
+  position: absolute;
+  inset: 0;
+  container-type: size;
+
+  * {
+    position: absolute;
+    background-repeat: no-repeat;
+    background-size: contain;
+  }
+}
+
+.banner__wrapper {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+// 720x1280 → 9/16.
 .vert .banner__wrapper {
-  aspect-ratio: 9/16;
-  width: min(100vw, 56.25vh);
-  height: min(100vh, 177.78vw);
+  width: min(100cqw, 56.25cqh) !important;
+  height: min(100cqh, 177.78cqw) !important;
 }
 
 // 1280x720 → 16/9
 .land .banner__wrapper {
-  aspect-ratio: 16/9;
-  width: min(100vw, 177.78vh);
-  height: min(100vh, 56.25vw);
+  width: min(100cqw, 177.78cqh) !important;
+  height: min(100cqh, 56.25cqw) !important;
+}
+
+@supports not (container-type: size) {
+  .vert .banner__wrapper {
+    width: min(100vw, 56.25vh);
+    height: min(100vh, 177.78vw);
+  }
+
+  .land .banner__wrapper {
+    width: min(100vw, 177.78vh);
+    height: min(100vh, 56.25vw);
+  }
 }
 
 // background + crops/side elements
@@ -20,7 +52,7 @@
   background-position: center;
 }
 
-// elements inside .banner__wrap
+// elements inside .banner__wrapper
 
 // ── Layout: vert ──────────────────────────────────────────────────────────────
 .vert {
